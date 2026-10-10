@@ -1,0 +1,20 @@
+{
+  "name": "github-webhook-relay",
+  "interface": {
+    "displayName": "GitHub webhook relay"
+  },
+  "plugins": [
+    {
+      "name": "gh-watch",
+      "source": {
+        "source": "local",
+        "path": "./plugins/gh-watch"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

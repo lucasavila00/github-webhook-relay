@@ -1,6 +1,6 @@
 # Workspace
 
-The repository is a pnpm workspace with four packages:
+The repository is a pnpm workspace with five packages:
 
 | Path | Package | Owner |
 | --- | --- | --- |
@@ -8,6 +8,7 @@ The repository is a pnpm workspace with four packages:
 | `packages/relay` | `@github-webhook-relay/relay` | Relay Worker and Durable Object |
 | `packages/webapp` | `@github-webhook-relay/webapp` | Browser and asset server functions |
 | `packages/local` | `@github-webhook-relay/local` | Local Node.js integration |
+| `packages/codex-tool` | `@github-webhook-relay/codex-tool` | Codex MCP server bundle |
 
 The core package owns all application data types and all Beff-generated
 validators. It has no browser, Cloudflare, or Node.js dependency. The other

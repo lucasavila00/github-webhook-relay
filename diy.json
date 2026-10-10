@@ -1,9 +1,11 @@
 {
   "include": [
+    "packages/core/src/**/*.ts",
     "packages/relay/src/**/*.ts",
     "packages/webapp/src/**/*.ts",
     "packages/webapp/src/**/*.tsx",
-    "packages/local/src/**/*.ts"
+    "packages/local/src/**/*.ts",
+    "packages/codex-tool/src/**/*.ts"
   ],
   "ignore": ["**/generated/**"]
 }
