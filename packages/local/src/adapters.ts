@@ -9,7 +9,7 @@ import type {
   LocalCapabilities,
 } from "./capabilities.ts";
 import { createProcessService } from "./lock.ts";
-import { LocalParsers, type LocalConfig } from "./parser.ts";
+import { Parsers, type LocalConfig } from "@github-webhook-relay/core";
 import {
   localError,
   type RelaySocket,
@@ -20,7 +20,7 @@ import {
 export function createNodeCapabilities(
   value: unknown,
 ): Capabilities<LocalCapabilities> {
-  const result = LocalParsers.LocalConfig.safeParse(value);
+  const result = Parsers.LocalConfig.safeParse(value);
   if (!result.success || !validConfig(result.data)) {
     throw localError("configuration", "Invalid local client configuration.");
   }

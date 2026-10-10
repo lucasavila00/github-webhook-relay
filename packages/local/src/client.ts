@@ -4,11 +4,12 @@ import { join } from "node:path";
 import type { Capabilities } from "@beff/diy/capabilities";
 import {
   Parsers,
+  type ConsumerState,
   type Cursor,
   type Event,
   type EventFilters,
   type StreamMessage,
-} from "@github-webhook-relay/contracts";
+} from "@github-webhook-relay/core";
 
 import type {
   AcknowledgeCapability,
@@ -19,7 +20,6 @@ import type {
   StorageCapability,
   WatchCapability,
 } from "./capabilities.ts";
-import { LocalParsers, type ConsumerState } from "./parser.ts";
 import {
   localError,
   relayError,
@@ -269,7 +269,7 @@ async function loadStateByKey(
   const value = await storageCall(() => capabilities.storage.read(path));
   if (value === undefined) return undefined;
   try {
-    const parsed = LocalParsers.ConsumerState.parse(JSON.parse(value) as unknown);
+    const parsed = Parsers.ConsumerState.parse(JSON.parse(value) as unknown);
     if (
       !validState(parsed) ||
       stateKey(parsed.consumer, canonicalFilters(parsed.filters)) !== key

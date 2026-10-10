@@ -1,6 +1,6 @@
 import type { Capability } from "@beff/diy/capabilities";
 
-import type { LocalConfig } from "./parser.ts";
+import type { LocalConfig } from "@github-webhook-relay/core";
 import type { SocketService } from "./types.ts";
 
 export type Clock = Readonly<{
