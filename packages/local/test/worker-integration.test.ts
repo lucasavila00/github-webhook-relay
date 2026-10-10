@@ -153,6 +153,12 @@ describe.sequential("local client with the relay Worker", () => {
       waitMilliseconds: 5_000,
     });
     await acknowledgeEvents(fixture.capabilities, before.acknowledgement);
+    const resumed = nextMatchingBatch(fixture.restartClient(), {
+      consumer: "reconnect",
+      filters: { repository: "owner/reconnect", type: "issues" },
+      waitMilliseconds: 10_000,
+    });
+    await waitForEstablishedConnection(fixture.worker.port);
     await stopChild(fixture.worker.child);
     const worker = await startWorker(fixture.teamDomain, {
       port: fixture.worker.port,
@@ -169,16 +175,12 @@ describe.sequential("local client with the relay Worker", () => {
       filters: { repository: "owner/reconnect", type: "issues" },
       waitMilliseconds: 5_000,
     });
-    const resumed = await nextMatchingBatch(fixture.restartClient(), {
-      consumer: "reconnect",
-      filters: { repository: "owner/reconnect", type: "issues" },
-      waitMilliseconds: 5_000,
-    });
+    const resumedBatch = await resumed;
 
     expect(retained.events.map((event) => event.deliveryId)).toEqual([
       "before-restart",
     ]);
-    expect(resumed.events.map((event) => event.deliveryId)).toEqual([
+    expect(resumedBatch.events.map((event) => event.deliveryId)).toEqual([
       "after-restart",
     ]);
   }, 30_000);
@@ -442,6 +444,20 @@ async function temporaryDirectory(prefix: string): Promise<string> {
 
 async function delay(milliseconds: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForEstablishedConnection(port: number): Promise<void> {
+  const encodedPort = port.toString(16).toUpperCase().padStart(4, "0");
+  const expires = Date.now() + 5_000;
+  while (Date.now() < expires) {
+    const connections = await readFile("/proc/net/tcp", "utf8");
+    if (connections.split("\n").some((line) => {
+      const fields = line.trim().split(/\s+/);
+      return fields[1]?.endsWith(`:${encodedPort}`) === true && fields[3] === "01";
+    })) return;
+    await delay(10);
+  }
+  throw new Error("Watch did not connect to the relay endpoint.");
 }
 
 async function nextMatchingBatch(
