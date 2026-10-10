@@ -8,7 +8,7 @@ import {
   type EventLimit,
   type EventPage,
   type EventType,
-} from "@github-webhook-relay/contracts";
+} from "@github-webhook-relay/core";
 
 import { GitHubParsers, type RawEventQuery } from "./github.ts";
 import { cursor, eventId } from "./ingestion.ts";

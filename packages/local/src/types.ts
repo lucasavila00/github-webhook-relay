@@ -1,26 +1,12 @@
 import type {
-  Event,
-  EventFilters,
+  Acknowledgement,
   PublicError,
   Subscribe,
-} from "@github-webhook-relay/contracts";
+  WatchRequest,
+  WatchResult,
+} from "@github-webhook-relay/core";
 
-export type Acknowledgement = Readonly<{ value: string }>;
-
-export type WatchRequest = Readonly<{
-  consumer: string;
-  filters: EventFilters;
-  waitMilliseconds: number;
-  signal?: AbortSignal;
-}>;
-
-export type WatchResult =
-  | Readonly<{
-      type: "batch";
-      events: ReadonlyArray<Event>;
-      acknowledgement: Acknowledgement;
-    }>
-  | Readonly<{ type: "timeout" }>;
+export type { Acknowledgement, WatchRequest, WatchResult };
 
 export type LocalErrorCode =
   | "cancelled"

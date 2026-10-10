@@ -1,5 +1,6 @@
 {
   "include": [
+    "packages/core/src/**/*.ts",
     "packages/relay/src/**/*.ts",
     "packages/webapp/src/**/*.ts",
     "packages/local/src/**/*.ts",

@@ -1,7 +1,5 @@
 node_modules/
-packages/contracts/src/generated/
+packages/core/src/generated/
 packages/relay/src/generated/
 packages/relay/worker-configuration.d.ts
 packages/webapp/worker-configuration.d.ts
-packages/local/src/generated/
-packages/codex-tool/src/generated/

@@ -7,18 +7,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "generate": "beff -p beff.json",
     "check": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
-    "@beff/client": "0.0.152",
     "@beff/diy": "0.0.33",
-    "@github-webhook-relay/contracts": "workspace:*",
+    "@github-webhook-relay/core": "workspace:*",
     "ws": "8.18.3"
   },
   "devDependencies": {
-    "@beff/cli": "0.0.152",
     "@types/node": "24.10.0",
     "@types/ws": "8.18.1",
     "typescript": "7.0.2",

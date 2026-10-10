@@ -1,16 +1,17 @@
 # Workspace
 
-The repository is a pnpm workspace with four packages:
+The repository is a pnpm workspace with five packages:
 
 | Path | Package | Owner |
 | --- | --- | --- |
-| `packages/contracts` | `@github-webhook-relay/contracts` | Wire types and Beff validators |
+| `packages/core` | `@github-webhook-relay/core` | Shared types, logic, and Beff validators |
 | `packages/relay` | `@github-webhook-relay/relay` | Relay Worker and Durable Object |
 | `packages/webapp` | `@github-webhook-relay/webapp` | Browser code and webapp Worker |
 | `packages/local` | `@github-webhook-relay/local` | Local Node.js integration |
+| `packages/codex-tool` | `@github-webhook-relay/codex-tool` | Codex MCP server bundle |
 
-The contracts package has no browser, Cloudflare, or Node.js dependency. The
-other packages can depend on contracts. Cloudflare bindings stay in the
+The core package has no browser, Cloudflare, or Node.js dependency. The other
+packages can depend on core. Cloudflare bindings stay in the
 package that deploys them.
 
 ## Development commands

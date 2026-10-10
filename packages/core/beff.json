@@ -2,5 +2,8 @@
   "parser": "./src/parser.ts",
   "outputDir": "./src/generated",
   "stringFormats": [{ "name": "nonEmpty" }],
-  "numberFormats": [{ "name": "waitMilliseconds" }]
+  "numberFormats": [
+    { "name": "eventLimit" },
+    { "name": "waitMilliseconds" }
+  ]
 }

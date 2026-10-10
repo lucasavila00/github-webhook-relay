@@ -1,9 +1,8 @@
 import type { Capabilities } from "@beff/diy/capabilities";
+import { Parsers } from "@github-webhook-relay/core";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 import type { LocalClientCapability } from "./capabilities.ts";
-import { ToolParsers } from "./parser.ts";
-
 export const tools = [
   {
     name: "watch",
@@ -54,7 +53,7 @@ export async function callTool(
   input: unknown,
 ): Promise<CallToolResult> {
   if (name === "watch") {
-    const parsed = ToolParsers.WatchToolInput.safeParse(input);
+    const parsed = Parsers.WatchToolInput.safeParse(input);
     if (!parsed.success) return toolError("invalid_request", "Invalid watch input.");
     try {
       return toolResult(await capabilities.localClient.watch(parsed.data));
@@ -63,7 +62,7 @@ export async function callTool(
     }
   }
   if (name === "acknowledge") {
-    const parsed = ToolParsers.AcknowledgeToolInput.safeParse(input);
+    const parsed = Parsers.AcknowledgeToolInput.safeParse(input);
     if (!parsed.success) {
       return toolError("invalid_request", "Invalid acknowledgement input.");
     }

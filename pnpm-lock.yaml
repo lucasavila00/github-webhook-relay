@@ -175,25 +175,19 @@ importers:
 
   packages/codex-tool:
     dependencies:
-      '@beff/client':
-        specifier: 0.0.152
-        version: 0.0.152(zod@3.25.76)
       '@beff/diy':
         specifier: 0.0.33
         version: 0.0.33
-      '@github-webhook-relay/contracts':
+      '@github-webhook-relay/core':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../core
       '@github-webhook-relay/local':
         specifier: workspace:*
         version: link:../local
       '@modelcontextprotocol/sdk':
         specifier: 1.32.1
-        version: 1.32.1(supports-color@10.2.2)(zod@3.25.76)
+        version: 1.32.1(supports-color@10.2.2)(zod@4.6.5)
     devDependencies:
-      '@beff/cli':
-        specifier: 0.0.152
-        version: 0.0.152
       '@types/node':
         specifier: 24.10.0
         version: 24.10.0
@@ -207,7 +201,7 @@ importers:
         specifier: 4.1.0
         version: 4.1.0(@types/node@24.10.0)(vite@8.3.4(@types/node@24.10.0)(esbuild@0.28.2))
 
-  packages/contracts:
+  packages/core:
     dependencies:
       '@beff/client':
         specifier: 0.0.152
@@ -225,22 +219,16 @@ importers:
 
   packages/local:
     dependencies:
-      '@beff/client':
-        specifier: 0.0.152
-        version: 0.0.152(zod@3.25.76)
       '@beff/diy':
         specifier: 0.0.33
         version: 0.0.33
-      '@github-webhook-relay/contracts':
+      '@github-webhook-relay/core':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../core
       ws:
         specifier: 8.18.3
         version: 8.18.3
     devDependencies:
-      '@beff/cli':
-        specifier: 0.0.152
-        version: 0.0.152
       '@types/node':
         specifier: 24.10.0
         version: 24.10.0
@@ -262,9 +250,9 @@ importers:
       '@beff/diy':
         specifier: 0.0.33
         version: 0.0.33
-      '@github-webhook-relay/contracts':
+      '@github-webhook-relay/core':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../core
     devDependencies:
       '@beff/cli':
         specifier: 0.0.152
@@ -287,9 +275,9 @@ importers:
       '@beff/diy':
         specifier: 0.0.33
         version: 0.0.33
-      '@github-webhook-relay/contracts':
+      '@github-webhook-relay/core':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../core
     devDependencies:
       '@cloudflare/vitest-plugin':
         specifier: 1.4.0
@@ -2028,7 +2016,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@modelcontextprotocol/sdk@1.32.1(supports-color@10.2.2)(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.32.1(supports-color@10.2.2)(zod@4.6.5)':
     dependencies:
       '@hono/node-server': 2.1.4(hono@4.13.13)
       ajv: 8.20.0
@@ -2045,8 +2033,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
+      zod: 4.6.5
+      zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - supports-color
 
@@ -2978,9 +2966,9 @@ snapshots:
       cookie: 1.1.1
       youch-core: 0.3.3
 
-  zod-to-json-schema@3.25.2(zod@3.25.76):
+  zod-to-json-schema@3.25.2(zod@4.6.5):
     dependencies:
-      zod: 3.25.76
+      zod: 4.6.5
 
   zod@3.25.76: {}
 

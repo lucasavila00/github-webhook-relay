@@ -3,7 +3,7 @@ import type {
   ErrorCode,
   EventType,
   HttpError,
-} from "@github-webhook-relay/contracts";
+} from "@github-webhook-relay/core";
 
 import { GitHubParsers } from "./github.ts";
 

@@ -3,6 +3,8 @@ export {
   type AccessJwtHeader,
   type AccessJwtPayload,
   type AccessKeySet,
+  type AcknowledgeToolInput,
+  type ConsumerState,
   type Cursor,
   type ErrorCode,
   type Event,
@@ -12,10 +14,17 @@ export {
   type EventQuery,
   type EventType,
   type HttpError,
+  type GitHubActionPayload,
+  type GitHubPullRequestPayload,
+  type GitHubPullRequestSelection,
+  type GitHubRepositoryPayload,
+  type LocalConfig,
   type NonEmptyString,
   type PublicError,
   type StreamMessage,
   type Subscribe,
+  type WatchToolInput,
+  type WaitMilliseconds,
 } from "./parser.ts";
 
 import type {
@@ -27,6 +36,31 @@ import type {
   EventQuery,
 } from "./parser.ts";
 import { Parsers } from "./parser.ts";
+
+export type StoredDelivery = Readonly<{
+  deliveryId: string;
+  eventType: Event["type"];
+  repository: string;
+  receivedAt: string;
+  payload: ArrayBuffer;
+}>;
+
+export type Acknowledgement = Readonly<{ value: string }>;
+
+export type WatchRequest = Readonly<{
+  consumer: string;
+  filters: EventFilters;
+  waitMilliseconds: number;
+  signal?: AbortSignal;
+}>;
+
+export type WatchResult =
+  | Readonly<{
+      type: "batch";
+      events: ReadonlyArray<Event>;
+      acknowledgement: Acknowledgement;
+    }>
+  | Readonly<{ type: "timeout" }>;
 
 export const DEFAULT_EVENT_LIMIT = 100;
 export const MAX_EVENT_LIMIT = 1_000;
