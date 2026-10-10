@@ -53,6 +53,13 @@ describe("event inspector state", () => {
       message: "Unavailable.",
       previous: { pages: [secondPage] },
     });
+
+    const selected = reduceView(failed, { type: "select", id: second.id });
+    expect(selected).toMatchObject({
+      state: "error",
+      message: "Unavailable.",
+      previous: { selectedEventId: second.id },
+    });
   });
 
   it("adds live events once and saves checkpoints after them", () => {

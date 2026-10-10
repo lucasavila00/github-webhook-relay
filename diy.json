@@ -2,6 +2,7 @@
   "include": [
     "packages/relay/src/**/*.ts",
     "packages/webapp/src/**/*.ts",
+    "packages/webapp/src/**/*.tsx",
     "packages/local/src/**/*.ts"
   ],
   "ignore": ["**/generated/**"]
