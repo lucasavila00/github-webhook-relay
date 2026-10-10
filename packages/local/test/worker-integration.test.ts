@@ -5,21 +5,21 @@ import { mkdtemp, rm } from "node:fs/promises";
 import {
   createServer,
   request as httpRequest,
-  type IncomingMessage,
   type Server,
 } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Duplex } from "node:stream";
 
+import { Capabilities } from "@beff/diy/capabilities";
 import { afterEach, describe, expect, it } from "vitest";
-import WebSocket, { WebSocketServer } from "ws";
 
 import {
   acknowledgeEvents,
   createNodeCapabilities,
   watchEvents,
 } from "../src/index.ts";
+import { createSocketService } from "../src/adapters.ts";
+import type { LocalCapabilities } from "../src/capabilities.ts";
 
 const cleanups: Array<() => Promise<void>> = [];
 
@@ -40,13 +40,20 @@ describe("local client with the relay Worker", () => {
         sub: "local-client-test",
       });
       const worker = await startWorker(keyServer.url);
-      const access = await startAccessProxy(worker.port, token);
       const stateDirectory = await temporaryDirectory("gh-watch-worker-state-");
-      const capabilities = createNodeCapabilities({
-        relayUrl: access.url,
+      const base = createNodeCapabilities({
+        relayUrl: `http://127.0.0.1:${worker.port}`,
         stateDirectory,
         accessClientId: "service-id",
         accessClientSecret: "service-secret",
+      });
+      const capabilities = Capabilities.create<LocalCapabilities>({
+        clock: base.clock,
+        config: base.config,
+        http: base.http,
+        network: createSocketService({ "Cf-Access-Jwt-Assertion": token }),
+        process: base.process,
+        storage: base.storage,
       });
       const body = JSON.stringify({
         action: "opened",
@@ -141,71 +148,6 @@ async function startKeyServer(
   const port = await listen(server);
   cleanups.push(async () => closeServer(server));
   return { url: `http://127.0.0.1:${port}` };
-}
-
-async function startAccessProxy(
-  workerPort: number,
-  token: string,
-): Promise<Readonly<{ url: string }>> {
-  const server = createServer();
-  const downstream = new WebSocketServer({ noServer: true });
-  const sockets = new Set<WebSocket>();
-  const pendingSockets = new Set<Duplex>();
-  server.on("upgrade", (request, socket, head) => {
-    pendingSockets.add(socket);
-    socket.once("close", () => pendingSockets.delete(socket));
-    if (
-      request.headers["cf-access-client-id"] !== "service-id" ||
-      request.headers["cf-access-client-secret"] !== "service-secret"
-    ) {
-      socket.destroy();
-      return;
-    }
-    connectWorkerStream(
-      workerPort,
-      token,
-      request,
-      socket,
-      head,
-      downstream,
-      sockets,
-    );
-  });
-  const port = await listen(server);
-  cleanups.push(async () => {
-    for (const socket of sockets) socket.terminate();
-    for (const socket of pendingSockets) socket.destroy();
-    downstream.close();
-    await closeServer(server);
-  });
-  return { url: `http://127.0.0.1:${port}` };
-}
-
-function connectWorkerStream(
-  workerPort: number,
-  token: string,
-  request: IncomingMessage,
-  socket: Duplex,
-  head: Buffer,
-  downstream: WebSocketServer,
-  sockets: Set<WebSocket>,
-): void {
-  const upstream = new WebSocket(
-    `ws://127.0.0.1:${workerPort}${request.url ?? "/api/events/stream"}`,
-    { headers: { "Cf-Access-Jwt-Assertion": token } },
-  );
-  upstream.once("open", () => {
-    downstream.handleUpgrade(request, socket, head, (client) => {
-      sockets.add(client);
-      sockets.add(upstream);
-      client.on("message", (value, binary) => upstream.send(value, { binary }));
-      upstream.on("message", (value, binary) => client.send(value, { binary }));
-      client.once("close", () => upstream.close());
-      upstream.once("close", (code, reason) => client.close(code, reason));
-    });
-  });
-  upstream.once("error", () => socket.destroy());
-  upstream.once("unexpected-response", (_request, response) => response.resume());
 }
 
 async function sendWebhook(

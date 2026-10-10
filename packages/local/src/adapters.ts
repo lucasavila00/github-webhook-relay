@@ -87,20 +87,27 @@ export function createFileStorage(): FileStorage {
   };
 }
 
-export function createSocketService(): SocketService {
-  return { connect: connectSocket };
+export function createSocketService(
+  headers: Readonly<Record<string, string>> = {},
+): SocketService {
+  return {
+    connect: (url, credentials, signal) =>
+      connectSocket(url, credentials, signal, headers),
+  };
 }
 
 async function connectSocket(
   url: string,
   credentials: Readonly<{ clientId: string; clientSecret: string }>,
   signal: AbortSignal,
+  headers: Readonly<Record<string, string>>,
 ): Promise<RelaySocket> {
   if (signal.aborted) throw localError("cancelled", "Watch was cancelled.");
   const socket = new WebSocket(url, {
     headers: {
       "CF-Access-Client-Id": credentials.clientId,
       "CF-Access-Client-Secret": credentials.clientSecret,
+      ...headers,
     },
   });
   await waitForOpen(socket, signal);

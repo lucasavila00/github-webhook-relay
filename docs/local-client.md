@@ -69,3 +69,10 @@ holder exits, including after a process failure.
 Each key has one validated JSON state file. Updates use a synced temporary file
 and an atomic rename. Removing a state file starts that consumer and filter set
 from the beginning of retained history.
+
+## Validation boundary
+
+Local integration tests use a real Worker, Durable Object, WebSocket, and
+generated Access JWT. A separate real socket test verifies the service-token
+headers from the production adapter. Hosted end-to-end validation must verify
+the actual Cloudflare Access service-token exchange.
