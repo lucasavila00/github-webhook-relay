@@ -53,11 +53,11 @@ request before merge. GitHub documents this requirement here:
 
 https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow
 
-Use this operator procedure for the first pre-merge proof. Check out the exact
-reviewed issue 16 commit and confirm that its hosted CI run passed. Set the
-Cloudflare and GitHub values from the preceding section only in the local
-operator environment. Lucas must explicitly approve the production deployment
-before the next commands run.
+Use this operator procedure for the first pre-merge proof. Check out the
+reviewed issue 16 branch and confirm that its hosted CI run passed. Record the
+tested commit as ordinary evidence. Set the Cloudflare and GitHub values from
+the preceding section only in the local operator environment. Lucas runs the
+following commands to deploy:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -78,15 +78,16 @@ reviewed `Deploy` workflow. They preserve the `github-webhook-relay` Worker,
 `EVENT_RELAY` binding, `EventRelay` class, `v1` SQLite migration, and existing
 Durable Object namespace. Do not create a second webapp Worker.
 
-Return to the repository root. Set `TESTED_COMMIT` to the reviewed commit and
-set `ACTIONS_RUN_URL` to its successful hosted CI run. Set
-`GH_WATCH_STATE_DIRECTORY` to a new private local directory. Configure the
-repository webhook as described in the next section. Then run the same built
-entry points as the reviewed `Live E2E` workflow:
+Return to the repository root. Set `ACTIONS_RUN_URL` to the successful hosted
+CI run. Configure the repository webhook as described in the next section.
+Then run the same built entry points as the reviewed `Live E2E` workflow:
 
 ```sh
-pnpm --filter @github-webhook-relay/e2e run full > live-e2e-report.json
-pnpm --filter @github-webhook-relay/e2e run revocation \
+export TESTED_COMMIT="$(git rev-parse HEAD)"
+export GH_WATCH_STATE_DIRECTORY="$(mktemp -d)"
+pnpm --silent --filter @github-webhook-relay/e2e run full \
+  > live-e2e-report.json
+pnpm --silent --filter @github-webhook-relay/e2e run revocation \
   > live-e2e-revocation-report.json
 ```
 
