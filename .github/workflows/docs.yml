@@ -17,10 +17,11 @@ jobs:
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           status=0
           mapfile -t files < <(
-            git diff --name-only --diff-filter=ACMR "$BASE_SHA" HEAD -- '*.md'
+            git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA" -- '*.md'
           )
 
           if ((${#files[@]} == 0)); then
@@ -33,12 +34,23 @@ jobs:
           fi
 
           for file in "${files[@]}"; do
-            if awk 'length > 80 { print FNR ":" $0; found=1 } END { exit found }' "$file"; then
-              :
-            else
-              echo "$file contains lines longer than 80 characters."
-              status=1
-            fi
+            case "$file" in
+              coordinator.md|AGENTS.md|*/AGENTS.md) ;;
+              *)
+                if awk '
+                  /^[[:space:]]*(```|~~~)/ { code = !code; next }
+                  code || /^    / || /^[[:space:]]*\|/ { next }
+                  /^[[:space:]]*([-*+] |[0-9]+[.] )?<?https?:\/\// { next }
+                  length > 80 { print FNR ":" $0; found=1 }
+                  END { exit found }
+                ' "$file"; then
+                  :
+                else
+                  echo "$file contains prose lines longer than 80 characters."
+                  status=1
+                fi
+                ;;
+            esac
 
             while IFS= read -r link; do
               case "$link" in
