@@ -1,7 +1,9 @@
 # GitHub webhook relay
 
-The shared event and transport contract is implemented. See the
-[public API reference](docs/public-api.md) for its complete behavior.
+The relay stores selected GitHub events, serves authenticated history and live
+updates, and exposes a local Codex watch tool. See the
+[public API reference](docs/public-api.md) and the
+[production operations guide](docs/operations.md).
 
 To run your own relay, follow [Getting started](docs/getting-started.md). See
 [Deployment](docs/deployment.md) for the Cloudflare configuration and deploy
@@ -15,7 +17,8 @@ from its last processed position. Reading an event does not delete it.
 
 ## Components
 
-The pnpm workspace contains five packages:
+The pnpm workspace contains the shared core, relay, webapp, local client,
+Codex tool, and real-resource E2E packages:
 
 - A core package owns shared data types and validators.
 - A relay package owns two Cloudflare Workers and one SQLite-backed Durable
@@ -24,6 +27,7 @@ The pnpm workspace contains five packages:
 - A webapp package owns the browser and asset server functions.
 - A local package connects outbound to the relay and saves consumer cursors.
 - A Codex tool package exposes the local client through the `gh-watch` plugin.
+- A live harness for GitHub, Cloudflare Access, Chromium, and the MCP tool.
 
 See the [workspace guide](docs/workspace.md) for component ownership and the
 [deployment guide](docs/deployment.md) for production setup.

@@ -1,6 +1,7 @@
 import type { Capabilities, Capability } from "@beff/diy/capabilities";
 import {
   Parsers,
+  type StreamAttachmentData,
   type Cursor,
   type EventFilters,
   type StreamMessage,

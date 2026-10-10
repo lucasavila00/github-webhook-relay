@@ -1,11 +1,11 @@
 import type { Capability, Capabilities } from "@beff/diy/capabilities";
-import type {
-  ErrorCode,
-  EventType,
-  HttpError,
-  StoredDelivery,
+import {
+  Parsers,
+  type ErrorCode,
+  type EventType,
+  type HttpError,
+  type StoredDelivery,
 } from "@github-webhook-relay/core";
-import { Parsers } from "@github-webhook-relay/core";
 
 export type { StoredDelivery } from "@github-webhook-relay/core";
 

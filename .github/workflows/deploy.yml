@@ -1,0 +1,54 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.10.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @github-webhook-relay/webapp exec playwright install --with-deps chromium
+      - run: pnpm generate
+      - run: pnpm check
+      - run: pnpm test
+      - name: Store the GitHub webhook secret
+        working-directory: packages/relay
+        env:
+          GITHUB_WEBHOOK_SECRET: ${{ secrets.GITHUB_WEBHOOK_SECRET }}
+        run: pnpm exec wrangler secret put WEBHOOK_SECRET <<<"$GITHUB_WEBHOOK_SECRET"
+      - name: Deploy the relay and browser
+        working-directory: packages/relay
+        env:
+          ACCESS_AUD: ${{ vars.ACCESS_AUD }}
+          ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
+          RELAY_HOSTNAME: ${{ vars.RELAY_HOSTNAME }}
+        run: >-
+          pnpm exec wrangler deploy
+          --config wrangler.jsonc
+          --var "ACCESS_AUD:$ACCESS_AUD"
+          --var "ACCESS_TEAM_DOMAIN:$ACCESS_TEAM_DOMAIN"
+          --domain "$RELAY_HOSTNAME"
+      - name: Deploy the webhook ingress
+        working-directory: packages/relay
+        env:
+          WEBHOOK_HOSTNAME: ${{ vars.WEBHOOK_HOSTNAME }}
+        run: >-
+          pnpm exec wrangler deploy
+          --config wrangler.ingress.jsonc
+          --domain "$WEBHOOK_HOSTNAME"

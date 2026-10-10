@@ -106,6 +106,51 @@ export type AcknowledgeToolInput = Readonly<{
   acknowledgement: Readonly<{ value: NonEmptyString }>;
 }>;
 
+export type LiveE2eConfig = Readonly<{
+  relayUrl: NonEmptyString;
+  webhookHostname: NonEmptyString;
+  webhookUrl: NonEmptyString;
+  githubToken: NonEmptyString;
+  githubRepository: NonEmptyString;
+  githubHookId: NonEmptyString;
+  accessClientId: NonEmptyString;
+  accessClientSecret: NonEmptyString;
+  stateDirectory: NonEmptyString;
+  testedCommit: NonEmptyString;
+  actionsRunUrl: NonEmptyString;
+}>;
+export type LiveE2eReport = Readonly<{
+  testedCommit: NonEmptyString;
+  actionsRunUrl: NonEmptyString;
+  repository: NonEmptyString;
+  dependencyCommits: ReadonlyArray<NonEmptyString>;
+  eventTypes: ReadonlyArray<EventType>;
+  browserVerified: true;
+  duplicateVerified: true;
+  offlineReplayVerified: true;
+  independentConsumersVerified: true;
+  hostnameBoundariesVerified: true;
+  invalidSignatureVerified: true;
+}>;
+export type GitHubE2eRepository = Readonly<{ default_branch: string }>;
+export type GitHubE2eReference = Readonly<{
+  object: Readonly<{ sha: string }>;
+}>;
+export type GitHubE2eIssue = Readonly<{ number: number }>;
+export type GitHubE2ePullRequest = Readonly<{
+  number: number;
+  head: Readonly<{ sha: string }>;
+}>;
+export type GitHubE2eDelivery = Readonly<{
+  id: number;
+  guid: string;
+  event: string;
+  action: string | null | undefined;
+  delivered_at: string;
+  redelivery: boolean;
+  status_code: number;
+}>;
+
 export type GitHubActionPayload = Readonly<{
   action: string;
 }>;
@@ -153,6 +198,13 @@ export const Parsers = parse.buildParsers<{
   ConsumerState: ConsumerState;
   WatchToolInput: WatchToolInput;
   AcknowledgeToolInput: AcknowledgeToolInput;
+  LiveE2eConfig: LiveE2eConfig;
+  LiveE2eReport: LiveE2eReport;
+  GitHubE2eRepository: GitHubE2eRepository;
+  GitHubE2eReference: GitHubE2eReference;
+  GitHubE2eIssue: GitHubE2eIssue;
+  GitHubE2ePullRequest: GitHubE2ePullRequest;
+  GitHubE2eDelivery: GitHubE2eDelivery;
   GitHubActionPayload: GitHubActionPayload;
   GitHubRepositoryPayload: GitHubRepositoryPayload;
   GitHubPullRequestPayload: GitHubPullRequestPayload;

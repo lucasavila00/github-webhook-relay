@@ -1,0 +1,28 @@
+{
+  "name": "@github-webhook-relay/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "pnpm run build",
+    "build": "esbuild src/full.ts src/revocation.ts --bundle --platform=node --format=esm --target=node22 --outdir=dist --external:playwright --external:ws --external:@modelcontextprotocol/sdk/* --external:@beff/diy/*",
+    "check": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "full": "node dist/full.js",
+    "revocation": "node dist/revocation.js"
+  },
+  "dependencies": {
+    "@beff/diy": "0.0.33",
+    "@github-webhook-relay/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "playwright": "1.56.1",
+    "ws": "8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "@types/ws": "8.18.1",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.0"
+  }
+}
