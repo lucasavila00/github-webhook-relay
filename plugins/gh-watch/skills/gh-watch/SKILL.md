@@ -1,6 +1,8 @@
 ---
 name: gh-watch
-description: Watch GitHub webhook relay events in the current Codex session and acknowledge each batch after it is handled.
+description: >-
+  Watch GitHub webhook relay events in the current Codex session and
+  acknowledge each batch after it is handled.
 ---
 
 Use the `gh-watch` MCP tools to receive GitHub events for the user's task.
