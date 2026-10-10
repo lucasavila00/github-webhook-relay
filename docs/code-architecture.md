@@ -9,6 +9,8 @@ API is described in the [README](../README.md).
 
 - The relay owns webhook ingestion, event history, queries, replay, and live
   delivery. Its Durable Object uses SQLite storage for the event log.
+  [GitHub webhook ingestion](webhook-ingestion.md) defines the accepted events,
+  storage schema, and response behavior.
 - The webapp server owns sign-in and authorization for webapp access. The
   browser renders event data and uses the public contract.
 - The local integration owns its consumer cursor and the connection to local
@@ -128,7 +130,7 @@ Keep Cloudflare bindings, compatibility settings, and Durable Object
 migrations in Wrangler configuration. Use package-local Wrangler commands
 through pnpm: `wrangler dev` for local execution, `wrangler types` for binding
 types, and `wrangler deploy` for deployment. See the
-[Wrangler commands](https://developers.cloudflare.com/workers/wrangler/commands/).
+[Wrangler](https://developers.cloudflare.com/workers/wrangler/).
 
 Generate binding types from configuration instead of maintaining a parallel
 handwritten environment definition. Use the standard Cloudflare runtime
@@ -138,8 +140,8 @@ integration. Do not build a custom replacement for Wrangler.
 ## Vitest tests without mocks
 
 Use Vitest for tests across the workspace. For Worker and Durable Object
-tests, use the official
-[Cloudflare Vitest integration](https://developers.cloudflare.com/workers/testing/vitest-integration/)
+tests, use the official Cloudflare
+[guide](https://developers.cloudflare.com/workers/testing/vitest-integration)
 to run code in the local Workers runtime with configured bindings.
 
 Build test capability bags with DIY, using real dependencies for that test
