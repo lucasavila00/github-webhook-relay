@@ -19,8 +19,8 @@ error and the same close code. An unexpected failure sends `internal_error`
 when possible, followed by close code `1011`.
 
 The one SQLite Durable Object owns all ingestion and subscriptions. Its
-WebSocket handler validates the cursor. One `transactionSync` call stores the
-filters under a small connection key and reads the replay rows. The handler
+WebSocket handler validates the cursor. One `transactionSync` call stores
+connection metadata and filter chunks, then reads the replay rows. The handler
 then sends the replay and registers live delivery without an `await`.
 An ingestion turn synchronously commits a new row and sends it to registered
 subscriptions. Durable Object turns cannot interleave across this boundary, so
@@ -39,12 +39,11 @@ come from the stored SQLite position, so a reconnect repeats the same IDs.
 
 The relay uses the Durable Object WebSocket Hibernation API. A socket attachment
 contains only its small connection key, last sent cursor, and delivery-budget
-use. SQLite stores filters with repository values of at most 1,000,000 UTF-8
-bytes. The event row stores the repository in its column and original payload,
-so a longer value cannot fit in SQLite's 2 MB row limit and cannot match an
-event. For a longer filter, the relay stores a compact cannot-match marker and
-still scans all positions and sends checkpoints. After hibernation, the adapter
-reads this metadata by connection key. It deletes the row on close or error.
+use. SQLite stores the optional event type in the connection row. It stores
+every repository filter as ordered chunk rows of at most 16,000 UTF-16 code
+units. The same transaction creates the metadata and all chunks. After
+hibernation, the adapter orders and joins the chunks to reconstruct the exact
+filter. It deletes the connection row and all chunk rows on close or error.
 
 The adapter updates the attachment after it sends the checkpoint. If a turn
 fails between the send and the update, reconnect can repeat an event but cannot
