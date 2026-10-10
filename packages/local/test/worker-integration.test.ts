@@ -184,12 +184,12 @@ describe.sequential("local client with the relay Worker", () => {
     });
     await connected;
     await stopChild(fixture.worker.child);
-    const worker = await startWorker(fixture.teamDomain, {
+    await startOwnerWorker(fixture.teamDomain, {
       port: fixture.worker.port,
       persist: fixture.worker.persist,
     });
     expect(await sendWebhook(
-      worker.port,
+      fixture.worker.ingressPort,
       fixture.token,
       "after-restart",
       "owner/reconnect",
@@ -227,6 +227,7 @@ describe.sequential("local client with the relay Worker", () => {
 
 type WorkerRuntime = Readonly<{
   child: ChildProcess;
+  ingressPort: number;
   port: number;
   persist: string;
 }>;
@@ -280,7 +281,7 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
     restartClient: createClient,
     send: async (delivery, repository) => {
       expect(await sendWebhook(
-        worker.port,
+        worker.ingressPort,
         token,
         delivery,
         repository,
@@ -312,13 +313,37 @@ async function startWorker(
   teamDomain: string,
   existing: Readonly<{ port: number; persist: string }> | null | undefined,
 ): Promise<WorkerRuntime> {
+  const owner = await startOwnerWorker(teamDomain, existing);
+  const ingressPort = await unusedPort();
+  const directory = join(process.cwd(), "../relay");
+  const ingressChild = spawn(
+    join(directory, "node_modules/.bin/wrangler"),
+    [
+      "dev", "--config", "wrangler.ingress.jsonc",
+      "--ip", "127.0.0.1", "--port", String(ingressPort),
+    ],
+    {
+      cwd: directory,
+      env: { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false" },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  await waitForWorker(ingressChild);
+  cleanups.push(async () => stopChild(ingressChild));
+  return { ...owner, ingressPort };
+}
+
+async function startOwnerWorker(
+  teamDomain: string,
+  existing: Readonly<{ port: number; persist: string }> | null | undefined,
+): Promise<Readonly<{ child: ChildProcess; port: number; persist: string }>> {
   const port = existing?.port ?? await unusedPort();
   const persist = existing?.persist ?? await temporaryDirectory("gh-watch-worker-");
   const directory = join(process.cwd(), "../relay");
   const child = spawn(
     join(directory, "node_modules/.bin/wrangler"),
     [
-      "dev", "--config", "test/browser-wrangler.jsonc",
+      "dev", "--config", "wrangler.jsonc",
       "--ip", "127.0.0.1", "--port", String(port),
       "--persist-to", persist,
       "--var", "ACCESS_AUD:test-audience",
