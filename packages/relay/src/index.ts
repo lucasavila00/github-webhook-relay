@@ -1,34 +1,40 @@
-import { Capabilities } from "@beff/diy";
+import { Capabilities } from "@beff/diy/capabilities";
 import { DurableObject } from "cloudflare:workers";
 
 import {
   authenticateAccessRequest,
   type AccessKeyStoreCapability,
-  type ClockCapability,
+  type ClockCapability as AccessClockCapability,
   type CryptoCapability,
   type HttpCapability,
 } from "./access.ts";
-import { hasValidWebhookSignature } from "./webhook.ts";
+import {
+  createCryptography,
+  ingestGitHubWebhook,
+  type ClockCapability,
+  type CryptographyCapability,
+  type EventStore,
+  type EventStoreCapability,
+  type StoredDelivery,
+} from "./ingestion.ts";
 
-declare global {
-  interface Env {
-    readonly GITHUB_WEBHOOK_SECRET: string;
-  }
-}
+type RelayEnv = Env & Readonly<{ WEBHOOK_SECRET: string }>;
 
 type RuntimeCapability =
   | HttpCapability
-  | ClockCapability
+  | AccessClockCapability
   | AccessKeyStoreCapability
   | CryptoCapability;
 
 type RelayConfiguration = Readonly<{
   accessAudience: string;
   accessTeamDomain: string;
-  githubWebhookSecret: string;
   relayHostname: string;
 }>;
 
+type WebhookHandler = (request: Request) => Promise<Response>;
+
+const objectName = "github-webhook-relay";
 const notImplemented = (): Response => new Response(null, { status: 501 });
 
 const unauthorized = (): Response =>
@@ -62,15 +68,10 @@ export async function handleRelayRequest(
   capabilities: Capabilities<RuntimeCapability>,
   configuration: RelayConfiguration,
   request: Request,
+  handleWebhook: WebhookHandler = async () => notImplemented(),
 ): Promise<Response> {
   if (isWebhookRequest(request, configuration)) {
-    return (await hasValidWebhookSignature(
-      capabilities,
-      configuration.githubWebhookSecret,
-      request,
-    ))
-      ? notImplemented()
-      : unauthorized();
+    return handleWebhook(request);
   }
 
   const principal = await authenticateAccessRequest(
@@ -115,23 +116,92 @@ const createRuntimeCapabilities = (): Capabilities<RuntimeCapability> =>
     http: { fetch: globalThis.fetch.bind(globalThis) },
   });
 
-export class EventRelay extends DurableObject<Env> {
-  override fetch(): Response {
-    return notImplemented();
+export class EventRelay extends DurableObject<RelayEnv> {
+  constructor(ctx: DurableObjectState, env: RelayEnv) {
+    super(ctx, env);
+    initializeEventStore(ctx.storage);
+  }
+
+  override fetch(request: Request): Promise<Response> {
+    if (
+      request.method !== "POST" ||
+      new URL(request.url).pathname !== "/webhooks/github"
+    ) {
+      return Promise.resolve(new Response(null, { status: 404 }));
+    }
+
+    const capabilities = Capabilities.create<
+      CryptographyCapability | EventStoreCapability | ClockCapability
+    >({
+      cryptography: createCryptography(this.env.WEBHOOK_SECRET),
+      eventStore: createEventStore(this.ctx.storage),
+      clock: { now: () => new Date().toISOString() },
+    });
+    return ingestGitHubWebhook(capabilities, request);
   }
 }
 
+export function initializeEventStore(storage: DurableObjectStorage): void {
+  storage.sql.exec(`
+    CREATE TABLE IF NOT EXISTS events (
+      position INTEGER PRIMARY KEY AUTOINCREMENT,
+      delivery_id TEXT NOT NULL UNIQUE,
+      event_type TEXT NOT NULL,
+      repository TEXT NOT NULL,
+      received_at TEXT NOT NULL,
+      payload BLOB NOT NULL
+    )
+  `);
+}
+
+export function createEventStore(storage: DurableObjectStorage): EventStore {
+  return {
+    append: (delivery: StoredDelivery): string =>
+      storage.transactionSync(() => {
+        storage.sql.exec(
+          `INSERT INTO events (
+            delivery_id, event_type, repository, received_at, payload
+          ) VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(delivery_id) DO NOTHING`,
+          delivery.deliveryId,
+          delivery.eventType,
+          delivery.repository,
+          delivery.receivedAt,
+          delivery.payload,
+        );
+        const row = storage.sql.exec<{ position: string }>(
+          `SELECT CAST(position AS TEXT) AS position
+           FROM events
+           WHERE delivery_id = ?`,
+          delivery.deliveryId,
+        ).one();
+        return row.position;
+      }),
+    hasPosition: (position: string): boolean =>
+      storage.sql.exec<{ found: number }>(
+        `SELECT EXISTS(
+          SELECT 1 FROM events WHERE position = ?
+        ) AS found`,
+        position,
+      ).one().found === 1,
+  };
+}
+
 export default {
-  fetch(request: Request, env: Env): Promise<Response> {
+  fetch(request: Request, env: RelayEnv): Promise<Response> {
+    const webhook = (webhookRequest: Request): Promise<Response> =>
+      env.EVENT_RELAY.get(env.EVENT_RELAY.idFromName(objectName)).fetch(
+        webhookRequest,
+      );
     return handleRelayRequest(
       createRuntimeCapabilities(),
       {
         accessAudience: env.ACCESS_AUD,
         accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-        githubWebhookSecret: env.GITHUB_WEBHOOK_SECRET,
         relayHostname: env.RELAY_HOSTNAME,
       },
       request,
+      webhook,
     );
   },
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<RelayEnv>;

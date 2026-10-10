@@ -3,6 +3,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [
-    cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } }),
+    cloudflareTest({
+      wrangler: { configPath: "./wrangler.jsonc" },
+      miniflare: { bindings: { WEBHOOK_SECRET: "test-secret" } },
+    }),
   ],
 });

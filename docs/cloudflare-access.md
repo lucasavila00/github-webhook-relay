@@ -62,7 +62,7 @@ Store the webhook secret with Wrangler. Do not put it in the configuration
 file:
 
 ```sh
-pnpm --filter @github-webhook-relay/relay exec wrangler secret put GITHUB_WEBHOOK_SECRET
+pnpm --filter @github-webhook-relay/relay exec wrangler secret put WEBHOOK_SECRET
 ```
 
 Deploy after the two hostname applications and the Worker-level application
