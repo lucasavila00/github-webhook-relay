@@ -210,6 +210,7 @@ describe.sequential("local client with the relay Worker", () => {
       port: fixture.worker.port,
       persist: fixture.worker.persist,
     });
+    await waitForBinding(fixture.worker.ingressPort);
     expect(await sendWebhook(
       fixture.worker.ingressPort,
       fixture.token,
@@ -428,6 +429,29 @@ async function sendWebhook(
     repository: { full_name: repository },
     issue: { number: 1 },
   });
+  return sendSignedWebhook(port, token, delivery, "issues", body);
+}
+
+async function waitForBinding(port: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const status = await sendSignedWebhook(port, "", "binding-ready", "ping", "{}");
+    if (status === 204) return;
+    if (status !== 503) {
+      throw new Error(`Binding readiness returned ${status}.`);
+    }
+    await delay(50);
+  }
+  throw new Error("Binding readiness timed out.");
+}
+
+async function sendSignedWebhook(
+  port: number,
+  token: string,
+  delivery: string,
+  event: string,
+  body: string,
+): Promise<number> {
   const signature = createHmac("sha256", "test-secret").update(body).digest("hex");
   return await new Promise<number>((resolve, reject) => {
     const request = httpRequest(
@@ -440,7 +464,7 @@ async function sendWebhook(
           "content-type": "application/json",
           "Cf-Access-Jwt-Assertion": token,
           "x-github-delivery": delivery,
-          "x-github-event": "issues",
+          "x-github-event": event,
           "x-hub-signature-256": `sha256=${signature}`,
         },
       },
