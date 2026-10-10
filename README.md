@@ -1,1 +1,107 @@
-# github-webhook-relay
+# GitHub webhook relay
+
+Draft public contract for review. Nothing described below is implemented yet.
+Endpoint names and message shapes are proposals.
+
+## Purpose
+
+Keep a persistent GitHub event history and deliver events to a webapp and a
+local Codex integration. A local client can disconnect and then replay events
+from its last processed position. Reading an event does not delete it.
+
+## Planned components
+
+A pnpm monorepo will contain:
+
+- A Cloudflare Worker and SQLite-backed Durable Object for webhook ingestion,
+  persistent event storage, queries, replay, and live subscriptions.
+- A webapp with a server for sign-in, authorized access, and event browsing.
+- A local Codex integration that consumes events and connects them to local
+  agent work.
+- Documentation for the public contract, setup, and operation.
+
+Package paths, frameworks, and deployment details will be decided in ADRs.
+
+## Draft public API
+
+### Receive GitHub events
+
+`POST /webhooks/github` receives GitHub webhook deliveries. It verifies the
+GitHub signature and stores the original payload before acknowledging receipt.
+Repeated delivery IDs refer to the same stored event.
+
+GitHub uses its webhook secret. Client credentials cannot submit webhook
+payloads through the read API.
+
+### Read event history
+
+`GET /api/events?after=<cursor>&limit=<count>` returns events in stored order.
+Optional `repository=owner/name` and `type=issues` filters select events.
+Omitting `after` starts at the beginning of stored history.
+
+Example response:
+
+```json
+{
+  "events": [
+    {
+      "id": "42",
+      "deliveryId": "github-delivery-id",
+      "type": "issues",
+      "repository": "owner/repo",
+      "receivedAt": "2026-10-10T13:00:00Z",
+      "payload": {}
+    }
+  ],
+  "cursor": "42",
+  "hasMore": false
+}
+```
+
+IDs and cursors are opaque strings. The cursor identifies how far the server
+has scanned, including events excluded by filters. Clients use the returned
+cursor for the next page. GitHub payloads retain their original shape.
+
+### Subscribe and resume
+
+`GET /api/events/stream` upgrades to a WebSocket connection. A client sends:
+
+```json
+{
+  "type": "subscribe",
+  "after": "42",
+  "filters": {"repository": "owner/repo", "type": "issues"}
+}
+```
+
+The server replays matching events after the cursor, then sends live events
+on the same connection. Omitting `after` requests stored history first.
+
+```json
+{"type": "event", "event": {"id": "43", "deliveryId": "...", "type": "issues", "repository": "owner/repo", "receivedAt": "...", "payload": {}}}
+{"type": "checkpoint", "cursor": "43"}
+```
+
+A checkpoint follows the events it covers. Clients save it after processing
+those events and send it on reconnect. Replay and live delivery must have no
+gap. Reconnects can repeat events; clients use event IDs to avoid duplicate
+work. Each consumer keeps its own cursor.
+
+### Authentication and errors
+
+Event history and subscriptions require authentication. The webapp server
+must authorize access, and the local client needs a credential that can be
+revoked. The sign-in provider, client pairing flow, credential transport,
+and access scope remain open decisions.
+
+HTTP errors use a JSON body with `error.code` and `error.message`. Exact
+status codes, stream errors, page limits, and slow-client behavior belong in
+the API ADR. WebSocket credentials must work for both browser and local
+clients.
+
+## Local Codex integration
+
+The local client connects outbound; it does not need a public listening port.
+It saves its cursor and resumes after a restart. How events select a repository,
+start or resume Codex work, and request approval remains to be agreed.
+Receiving an event alone does not authorize a code change or a merge.
