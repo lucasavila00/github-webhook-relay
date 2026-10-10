@@ -118,7 +118,7 @@ describe("MCP tools with the relay Worker", () => {
           env: {
             ...process.env,
             CODEX_HOME: codexHome,
-            GH_WATCH_RELAY_URL: `http://127.0.0.1:${worker.port}`,
+            GH_WATCH_RELAY_URL: `http://localhost:${worker.port}`,
             GH_WATCH_STATE_DIRECTORY: stateDirectory,
             CF_ACCESS_CLIENT_ID: "service-id",
             CF_ACCESS_CLIENT_SECRET: "service-secret",
@@ -159,7 +159,7 @@ describe("MCP tools with the relay Worker", () => {
       const worker = await startWorker(keyServer.url);
       const stateDirectory = await temporaryDirectory("gh-watch-tool-state-");
       const base = createNodeCapabilities({
-        relayUrl: `http://127.0.0.1:${worker.port}`,
+        relayUrl: `http://localhost:${worker.port}`,
         stateDirectory,
         accessClientId: "service-id",
         accessClientSecret: "service-secret",
@@ -301,6 +301,8 @@ async function startWorker(teamDomain: string): Promise<Readonly<{ port: number 
     wrangler,
     [
       "dev",
+      "--config",
+      "test/browser-wrangler.jsonc",
       "--ip",
       "127.0.0.1",
       "--port",
@@ -311,8 +313,6 @@ async function startWorker(teamDomain: string): Promise<Readonly<{ port: number 
       "ACCESS_AUD:test-audience",
       "--var",
       `ACCESS_TEAM_DOMAIN:${teamDomain}`,
-      "--var",
-      "RELAY_HOSTNAME:relay.example.com",
       "--var",
       "WEBHOOK_SECRET:test-secret",
     ],

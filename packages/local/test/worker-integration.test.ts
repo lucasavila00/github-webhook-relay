@@ -255,7 +255,7 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
   const worker = await startWorker(keyServer.url, undefined);
   const stateDirectory = await temporaryDirectory("gh-watch-worker-state-");
   const config = {
-    relayUrl: `http://127.0.0.1:${worker.port}`,
+    relayUrl: `http://localhost:${worker.port}`,
     stateDirectory,
     accessClientId: "service-id",
     accessClientSecret: "service-secret",
@@ -318,11 +318,11 @@ async function startWorker(
   const child = spawn(
     join(directory, "node_modules/.bin/wrangler"),
     [
-      "dev", "--ip", "127.0.0.1", "--port", String(port),
+      "dev", "--config", "test/browser-wrangler.jsonc",
+      "--ip", "127.0.0.1", "--port", String(port),
       "--persist-to", persist,
       "--var", "ACCESS_AUD:test-audience",
       "--var", `ACCESS_TEAM_DOMAIN:${teamDomain}`,
-      "--var", "RELAY_HOSTNAME:relay.example.com",
       "--var", "WEBHOOK_SECRET:test-secret",
     ],
     {

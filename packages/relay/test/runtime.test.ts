@@ -18,6 +18,7 @@ import {
   handleRelayRequest,
   type EventRelay,
 } from "../src/index.ts";
+import { handleIngressRequest } from "../src/ingress.ts";
 import type {
   ClockCapability as AccessClockCapability,
   CryptoCapability,
@@ -137,14 +138,14 @@ describe.sequential("GitHub webhook ingestion", () => {
     const body = payload({ action: "opened" });
     const signature = await sign(`${body} `);
 
-    const rejected = await SELF.fetch("https://relay.test/webhooks/github", {
+    const rejected = await ingressFetch("https://hooks.test/webhooks/github", {
       method: "POST",
       headers: headers("issues", "signature-1", signature),
       body,
     });
     await expectError(rejected, 401, "unauthorized");
 
-    const invalidJson = await SELF.fetch("https://relay.test/webhooks/github", {
+    const invalidJson = await ingressFetch("https://hooks.test/webhooks/github", {
       method: "POST",
       headers: headers("issues", "signature-2", await sign("not-json")),
       body: "not-json",
@@ -163,7 +164,7 @@ describe.sequential("GitHub webhook ingestion", () => {
       });
       if (signature != null) requestHeaders.set("x-hub-signature-256", signature);
 
-      const response = await SELF.fetch("https://relay.test/webhooks/github", {
+      const response = await ingressFetch("https://hooks.test/webhooks/github", {
         method: "POST",
         headers: requestHeaders,
         body,
@@ -174,7 +175,7 @@ describe.sequential("GitHub webhook ingestion", () => {
 
   it("returns 400 for missing headers or invalid selected fields", async () => {
     const body = payload({ action: "opened" });
-    const missingDelivery = await SELF.fetch("https://relay.test/webhooks/github", {
+    const missingDelivery = await ingressFetch("https://hooks.test/webhooks/github", {
       method: "POST",
       headers: {
         "x-github-event": "issues",
@@ -184,7 +185,7 @@ describe.sequential("GitHub webhook ingestion", () => {
     });
     await expectError(missingDelivery, 400, "invalid_request");
 
-    const missingEvent = await SELF.fetch("https://relay.test/webhooks/github", {
+    const missingEvent = await ingressFetch("https://hooks.test/webhooks/github", {
       method: "POST",
       headers: {
         "x-github-delivery": "missing-event-1",
@@ -262,6 +263,36 @@ describe.sequential("GitHub webhook ingestion", () => {
 
     const response = await send("issues", "storage-failure", payload({ action: "opened" }));
     await expectError(response, 500, "internal_error");
+  });
+});
+
+describe.sequential("Worker surface boundaries", () => {
+  afterEach(async () => {
+    await reset();
+  });
+
+  it("rejects protected routes in the ingress Worker", async () => {
+    const access = await createAccessSession();
+    const headers = { "Cf-Access-Jwt-Assertion": access.token };
+    const responses = await Promise.all([
+      ingressFetch("https://hooks.test/", { headers }),
+      ingressFetch("https://hooks.test/api/events", { headers }),
+      ingressFetch("https://hooks.test/api/events/stream", {
+        headers: { ...headers, Upgrade: "websocket" },
+      }),
+      ingressFetch("https://hooks.test/webhooks/github", { headers }),
+    ]);
+    expect(responses.map(({ status }) => status)).toEqual([404, 404, 404, 404]);
+  });
+
+  it("rejects webhooks in the relay Worker", async () => {
+    const access = await createAccessSession();
+    const headers = { "Cf-Access-Jwt-Assertion": access.token };
+    const response = await SELF.fetch("https://relay.test/webhooks/github", {
+      method: "POST",
+      headers,
+    });
+    expect(response.status).toBe(404);
   });
 });
 
@@ -868,7 +899,6 @@ describe.sequential("authenticated browser assets", () => {
       {
         accessAudience: env.ACCESS_AUD,
         accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-        relayHostname: env.RELAY_HOSTNAME,
       },
       env.EVENT_RELAY,
       new Request("https://relay.test/", {
@@ -887,7 +917,6 @@ describe.sequential("authenticated browser assets", () => {
       {
         accessAudience: env.ACCESS_AUD,
         accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-        relayHostname: env.RELAY_HOSTNAME,
       },
       env.EVENT_RELAY,
       new Request("https://relay.test/", { headers }),
@@ -952,11 +981,15 @@ function payload(
 }
 
 async function send(event: string, delivery: string, body: string): Promise<Response> {
-  return SELF.fetch("https://relay.test/webhooks/github", {
+  return ingressFetch("https://hooks.test/webhooks/github", {
     method: "POST",
     headers: headers(event, delivery, await sign(body)),
     body,
   });
+}
+
+function ingressFetch(input: string, init: RequestInit): Promise<Response> {
+  return handleIngressRequest(env.EVENT_RELAY, new Request(input, init));
 }
 
 function headers(event: string, delivery: string, signature: string): Headers {
@@ -1083,7 +1116,6 @@ function readHistory(access: AccessSession, query: string): Promise<Response> {
     {
       accessAudience: env.ACCESS_AUD,
       accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-      relayHostname: env.RELAY_HOSTNAME,
     },
     env.EVENT_RELAY,
     new Request(`https://relay.test/api/events${query}`, {
@@ -1098,7 +1130,6 @@ async function openStream(access: AccessSession): Promise<WebSocket> {
     {
       accessAudience: env.ACCESS_AUD,
       accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-      relayHostname: env.RELAY_HOSTNAME,
     },
     env.EVENT_RELAY,
     new Request("https://relay.test/api/events/stream", {
