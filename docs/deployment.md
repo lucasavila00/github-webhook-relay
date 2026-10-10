@@ -137,14 +137,9 @@ ingress configuration, keep `script_name` set to `github-webhook-relay`. These
 settings connect both Workers to the existing Durable Object namespace and its
 stored event history.
 
-Create a high-entropy GitHub webhook secret. Set it as a Wrangler secret and
-enter the same value when you create the GitHub webhook:
-
-```sh
-pnpm --filter @github-webhook-relay/relay exec wrangler secret put WEBHOOK_SECRET
-```
-
-Wrangler prompts for the secret value. Do not put this value in
+Create a high-entropy GitHub webhook secret and keep it in your credential
+manager. You will set it after the first owner deployment and enter the same
+value when you create the GitHub webhook. Do not put this value in
 `wrangler.jsonc` or commit it.
 
 ## 4. Deploy
@@ -155,14 +150,16 @@ Worker from the repository root:
 ```sh
 pnpm --filter @github-webhook-relay/webapp build
 pnpm --filter @github-webhook-relay/relay exec wrangler deploy
+pnpm --filter @github-webhook-relay/relay exec wrangler secret put WEBHOOK_SECRET
 pnpm --filter @github-webhook-relay/relay exec wrangler deploy --config wrangler.ingress.jsonc
 ```
 
 The owner must exist before Wrangler can bind the ingress Worker to its Durable
-Object. Each deployment creates its custom-domain DNS record. In **Workers &
-Pages**, open each Worker, then open **Settings**, **Domains & Routes**. Confirm
-that each Worker has its expected custom domain and that `workers.dev` and
-preview URLs are disabled.
+Object. It must also exist before Wrangler can set its secret. Wrangler prompts
+for the secret value. Each deployment creates its custom-domain DNS record. In
+**Workers & Pages**, open each Worker, then open **Settings**, **Domains &
+Routes**. Confirm that each Worker has its expected custom domain and that
+`workers.dev` and preview URLs are disabled.
 
 The checked-in owner Worker name, `EVENT_RELAY` binding, external
 `script_name`, and `v1` migration preserve the Durable Object namespace across
