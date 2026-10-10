@@ -2,10 +2,10 @@
 
 ## GitHub activity and local agent work
 
-A developer needs local Codex work to respond to GitHub activity across their
-repositories. Issues, comments, reviews, merges, and CI results can change
-what needs attention. The developer needs one place to inspect these events
-and a reliable way to deliver them to local tools.
+Lucas needs local Codex work to respond to GitHub activity across his
+repositories. Issue creation, issue comments, pull request comments, and pull
+request merges can change what needs attention. He needs one place to inspect
+these events and a reliable way to deliver them to local tools.
 
 Repeatedly checking GitHub for changes adds delay and repeated work. A live
 connection alone is insufficient: the local machine can be offline, a process
@@ -14,8 +14,10 @@ can restart, or a connection can fail while new events arrive.
 ## History and continuity
 
 Events must remain available after they are delivered. Reading an event must
-not remove it from the history. The developer needs to search and filter past
-events, and a consumer needs to replay them from a known position.
+not remove it from the history. Keep stored events indefinitely. Do not add
+a retention limit, automatic expiration, or cleanup process. The developer
+needs to search and filter past events, and a consumer needs to replay them
+from a known position.
 
 Each consumer has its own progress. A webapp and a local client can read the
 same event without taking it away from each other. A reconnect must continue
@@ -25,7 +27,9 @@ cause duplicate work.
 
 ## Access from the browser and local machine
 
-The webapp provides event browsing through a server with authentication. The
+The product is for Lucas alone. Shared access and multiple user accounts are
+outside its scope. The webapp provides event browsing through a server with
+authentication. The
 local Codex integration consumes the same event history and live stream.
 Both need authorized access. Local credentials must be revocable.
 
@@ -39,10 +43,16 @@ The relay records and delivers GitHub events. The local integration connects
 those events to local Codex work. Event receipt and permission to act are
 separate: receiving a message alone does not authorize a code change or merge.
 
-The intended automatic actions, the events that trigger them, and how they
-connect to existing local work still need a product definition. The same is
-true of whether access is limited to one developer or shared with other users,
-and how long stored history must remain available.
+The events in scope are:
+
+- Creation of an issue.
+- Comments on issues.
+- Comments on pull requests.
+- Merging of a pull request.
+
+These events must be available to the local Codex integration. The exact
+Codex action for each event and how it connects to existing local work still
+need a product definition.
 
 ## Desired result
 
