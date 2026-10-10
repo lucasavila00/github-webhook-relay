@@ -65,8 +65,8 @@ exact string equality. The server scans after the input cursor, returns at most
 `limit` matching events, and sets the output cursor to its last scanned
 position. Thus, the cursor can advance across excluded events. `hasMore` is
 true only when a later matching event exists at response time. The server can
-look ahead to set `hasMore`, but the returned cursor does not advance past an
-event that the page does not return.
+look ahead to set `hasMore`, but the returned cursor does not advance past a
+matching event that the page does not return.
 
 The stream accepts one `Subscribe` message. It scans stored events after the
 cursor and then continues with live events without a gap. It sends matching
