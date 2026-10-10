@@ -125,6 +125,7 @@ async function waitForOpen(socket: WebSocket, signal: AbortSignal): Promise<void
     };
     const onAbort = (): void => {
       cleanup();
+      socket.once("error", () => undefined);
       socket.terminate();
       reject(localError("cancelled", "Watch was cancelled."));
     };
