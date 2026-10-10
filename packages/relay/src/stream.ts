@@ -189,9 +189,11 @@ export function publishStoredEvent(
   const row = capabilities.streamStore.readEvent(position);
   if (row === undefined) return;
   for (const socket of capabilities.streamSockets.list()) {
-    const attachment = parseAttachment(capabilities.streamSockets.load(socket));
-    if (attachment === undefined) continue;
+    let connectionKey: string | undefined;
     try {
+      const attachment = parseAttachment(capabilities.streamSockets.load(socket));
+      if (attachment === undefined) continue;
+      connectionKey = attachment.connectionKey;
       const filters = capabilities.streamStore.readFilters(attachment.connectionKey);
       if (filters === undefined) {
         closeInternal(capabilities, socket, attachment.connectionKey);
@@ -204,7 +206,7 @@ export function publishStoredEvent(
       }
       sendDelivery(capabilities, socket, result.delivery);
     } catch {
-      closeInternal(capabilities, socket, attachment.connectionKey);
+      isolateFailedSocket(capabilities, socket, connectionKey);
     }
   }
 }
@@ -376,6 +378,36 @@ function closeInternal(
     1011,
     connectionKey,
   );
+}
+
+function isolateFailedSocket(
+  capabilities: Capabilities<StreamCapabilities>,
+  socket: WebSocket,
+  connectionKey?: string,
+): void {
+  if (connectionKey !== undefined) {
+    try {
+      capabilities.streamStore.close(connectionKey);
+    } catch {
+      // The failed socket must not stop delivery to another consumer.
+    }
+  }
+  try {
+    capabilities.streamSockets.send(
+      socket,
+      encodeMessage({
+        type: "error",
+        error: { code: "internal_error", message: "Internal server error." },
+      }),
+    );
+  } catch {
+    // The socket can already reject writes.
+  }
+  try {
+    capabilities.streamSockets.close(socket, 1011, "Internal server error.");
+  } catch {
+    // The socket can already be closed.
+  }
 }
 
 function closeForReconnect(
