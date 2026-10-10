@@ -1,15 +1,17 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createProcessService } from "../src/lock.ts";
 
 const directories: Array<string> = [];
+const execute = promisify(execFile);
 
 afterEach(async () => {
   while (directories.length > 0) {
@@ -62,6 +64,9 @@ describe("Linux consumer lock", () => {
 
     holder.kill("SIGKILL");
     await once(holder, "close");
+    await execute("flock", ["--exclusive", lockPath, "true"], {
+      timeout: 5_000,
+    });
     await expect(
       createProcessService().withFileLock(lockPath, async () => "released"),
     ).resolves.toBe("released");
