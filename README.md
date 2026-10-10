@@ -1,7 +1,7 @@
 # GitHub webhook relay
 
-The shared event and transport contract and the authentication boundary are
-implemented. Event storage and delivery are not implemented. See the
+The shared event and transport contract, authentication boundary, event
+storage, and delivery are implemented. See the
 [public API reference](docs/public-api.md) for the contract behavior.
 
 ## Purpose
