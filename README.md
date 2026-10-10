@@ -105,19 +105,3 @@ The local client connects outbound; it does not need a public listening port.
 It saves its cursor and resumes after a restart. How events select a repository,
 start or resume Codex work, and request approval remains to be agreed.
 Receiving an event alone does not authorize a code change or a merge.
-
-## Delivery process
-
-1. Agree on this rough public contract.
-2. Split the work into focused GitHub issues.
-3. Propose one decision at a time with [the ADR template](docs/adr/template.md).
-4. Agree on each ADR before its implementation.
-5. Implement each agreed step in a pull request. Move its contract into the
-   maintained docs and remove the temporary proposal ADR in that pull request.
-
-Likely steps are the monorepo structure, relay API and storage, webapp server
-and authentication, local Codex integration, and setup documentation. These
-are planning topics, not approved decisions.
-
-Open questions include access scope, event retention, authentication, and the
-local Codex behavior. Issue #3 currently describes the relay component only.
