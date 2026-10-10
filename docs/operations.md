@@ -1,8 +1,8 @@
 # Production operations
 
 This guide deploys and proves the one-user GitHub webhook relay. The real
-provider proof is incomplete until the `production` GitHub environment has the
-values below and both manual workflows pass.
+provider proof is incomplete until the pre-merge procedure below passes or the
+protected workflows pass after they reach the default branch.
 
 ## Cloudflare setup
 
@@ -45,11 +45,61 @@ GITHUB_E2E_REPOSITORY  GITHUB_E2E_HOOK_ID
 `RELAY_URL` is `https://<relay-host>`. Keep credentials out of repository
 variables, source files, workflow artifacts, and logs.
 
-Run the manual `Deploy` workflow on the commit to deploy. It validates the
-workspace, stores `WEBHOOK_SECRET` through Wrangler, builds the browser, and
-deploys `packages/relay`. This preserves the `github-webhook-relay` Worker,
+## Pre-merge deployment and proof
+
+GitHub permits `workflow_dispatch` only when the workflow file exists on the
+default branch. Thus, a new deployment workflow cannot prove its own pull
+request before merge. GitHub documents this requirement here:
+
+https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow
+
+Use this operator procedure for the first pre-merge proof. Check out the exact
+reviewed issue 16 commit and confirm that its hosted CI run passed. Set the
+Cloudflare and GitHub values from the preceding section only in the local
+operator environment. Lucas must explicitly approve the production deployment
+before the next commands run.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm --filter @github-webhook-relay/webapp exec playwright install --with-deps chromium
+pnpm generate
+cd packages/relay
+pnpm exec wrangler secret put WEBHOOK_SECRET
+pnpm exec wrangler deploy \
+  --var "ACCESS_AUD:$ACCESS_AUD" \
+  --var "ACCESS_TEAM_DOMAIN:$ACCESS_TEAM_DOMAIN" \
+  --var "RELAY_HOSTNAME:$RELAY_HOSTNAME" \
+  --domain "$RELAY_HOSTNAME"
+```
+
+Enter `GITHUB_WEBHOOK_SECRET` only at the Wrangler secret prompt. These are the
+same build, secret, variable, custom-host, and deploy operations as the
+reviewed `Deploy` workflow. They preserve the `github-webhook-relay` Worker,
 `EVENT_RELAY` binding, `EventRelay` class, `v1` SQLite migration, and existing
 Durable Object namespace. Do not create a second webapp Worker.
+
+Return to the repository root. Set `TESTED_COMMIT` to the reviewed commit and
+set `ACTIONS_RUN_URL` to its successful hosted CI run. Set
+`GH_WATCH_STATE_DIRECTORY` to a new private local directory. Configure the
+repository webhook as described in the next section. Then run the same built
+entry points as the reviewed `Live E2E` workflow:
+
+```sh
+pnpm --filter @github-webhook-relay/e2e run full > live-e2e-report.json
+pnpm --filter @github-webhook-relay/e2e run revocation \
+  > live-e2e-revocation-report.json
+```
+
+Before the revocation command, delete or rotate the tested Access service
+token and keep its old values in the local environment. After the command
+passes, replace the local values with the new token. Complete the private
+browser, denied identity, and installed Codex checks in the Live proof section.
+Keep both reports with the hosted CI URL and manual results.
+
+This pre-merge procedure has not run because the provider configuration and
+credentials are not available. Local runtime tests do not satisfy this proof.
+After these workflow files merge to the default branch, use the protected
+`Deploy` and `Live E2E` workflows for later releases.
 
 ## GitHub webhook
 
