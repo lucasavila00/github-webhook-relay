@@ -38,10 +38,11 @@ The relay stores new issues, new issue and pull request conversation comments,
 new inline pull request review comments, and merged pull requests. It ignores
 other actions from the four selected GitHub event groups.
 
-Select **Add webhook**. GitHub sends a `ping` delivery. A successful ping only
-proves that GitHub can reach the public hostname. Create a test issue after the
-webhook is active, then refresh the relay webapp and confirm that the issue
-event is present.
+Select **Add webhook**. GitHub sends a signed `ping` delivery. A successful ping
+confirms that GitHub can reach the public hostname and that the relay accepts
+the configured secret. It does not prove event storage. Create a test issue
+after the webhook is active, then refresh the relay webapp and confirm that the
+issue event is present.
 
 The webhook hostname has no Cloudflare Access application or bypass policy.
 The Worker verifies the GitHub HMAC signature before it stores a delivery.
@@ -97,6 +98,9 @@ your provider configuration is correct.
 
 ## References
 
-- [Creating GitHub webhooks](https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks)
-- [Validating GitHub webhook deliveries](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries)
-- [Cloudflare Access for Workers](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)
+- Creating GitHub webhooks:
+  https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks
+- Validating GitHub webhook deliveries:
+  https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
+- Cloudflare Access for Workers:
+  https://developers.cloudflare.com/workers/configuration/cloudflare-access/

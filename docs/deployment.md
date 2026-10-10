@@ -21,6 +21,7 @@ Install the workspace dependencies and authenticate Wrangler:
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm generate
 pnpm --filter @github-webhook-relay/relay exec wrangler login
 ```
 
@@ -188,10 +189,17 @@ validation is pending. Source checks and hosted CI do not replace this proof.
 
 ## References
 
-- [Cloudflare Worker custom domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
-- [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)
-- [Wrangler Durable Object bindings](https://developers.cloudflare.com/workers/wrangler/configuration/#durable-objects)
-- [Cloudflare Access for a specific Worker hostname](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)
-- [Cloudflare self-hosted applications](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/)
-- [Cloudflare Access service tokens](https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/)
-- [Cloudflare Access JWT validation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
+- Cloudflare Worker custom domains:
+  https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
+- Wrangler configuration:
+  https://developers.cloudflare.com/workers/wrangler/configuration/
+- Wrangler Durable Object bindings:
+  https://developers.cloudflare.com/workers/wrangler/configuration/#durable-objects
+- Cloudflare Access for a specific Worker hostname:
+  https://developers.cloudflare.com/workers/configuration/cloudflare-access/
+- Cloudflare self-hosted applications:
+  https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/
+- Cloudflare Access service tokens:
+  https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/
+- Cloudflare Access JWT validation:
+  https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/
