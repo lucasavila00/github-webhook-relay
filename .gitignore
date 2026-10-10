@@ -2,3 +2,4 @@ node_modules/
 packages/core/src/generated/
 packages/relay/worker-configuration.d.ts
 packages/webapp/worker-configuration.d.ts
+packages/local/src/generated/

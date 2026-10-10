@@ -104,6 +104,6 @@ both browser and local clients.
 ## Local Codex integration
 
 The local client connects outbound; it does not need a public listening port.
-It saves its cursor and resumes after a restart. How events select a repository,
-start or resume Codex work, and request approval remains to be agreed.
-Receiving an event alone does not authorize a code change or a merge.
+It saves independent consumer cursors and resumes after a restart. See the
+[local client guide](docs/local-client.md) for its watch and acknowledgement
+contract. Receiving an event alone does not authorize a code change or merge.

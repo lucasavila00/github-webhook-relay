@@ -77,6 +77,35 @@ export type StreamMessage =
   | Readonly<{ type: "checkpoint"; cursor: Cursor }>
   | Readonly<{ type: "error"; error: PublicError }>;
 
+export type LocalConfig = Readonly<{
+  relayUrl: string;
+  stateDirectory: string;
+  accessClientId: string;
+  accessClientSecret: string;
+}>;
+export type PendingBatch = Readonly<{
+  token: string;
+  base?: Cursor;
+  checkpoint: Cursor;
+}>;
+export type ConsumerState = Readonly<{
+  version: 1;
+  consumer: string;
+  filters: EventFilters;
+  acknowledged?: Cursor;
+  generation: number;
+  pending?: PendingBatch;
+}>;
+export type WaitMilliseconds = NumberFormat<"waitMilliseconds">;
+export type WatchToolInput = Readonly<{
+  consumer: NonEmptyString;
+  filters: EventFilters;
+  waitMilliseconds: WaitMilliseconds;
+}>;
+export type AcknowledgeToolInput = Readonly<{
+  acknowledgement: Readonly<{ value: NonEmptyString }>;
+}>;
+
 export type GitHubActionPayload = Readonly<{
   action: string;
 }>;
@@ -108,6 +137,12 @@ export type RawEventQuery = Readonly<{
   type?: string;
   limit?: string;
 }>;
+export type StreamAttachmentData = Readonly<{
+  bytes: number;
+  connectionKey: string;
+  cursor: string;
+  positions: number;
+}>;
 
 import parse from "./generated/parser";
 
@@ -125,11 +160,16 @@ export const Parsers = parse.buildParsers<{
   PublicError: PublicError;
   HttpError: HttpError;
   StreamMessage: StreamMessage;
+  LocalConfig: LocalConfig;
+  ConsumerState: ConsumerState;
+  WatchToolInput: WatchToolInput;
+  AcknowledgeToolInput: AcknowledgeToolInput;
   GitHubActionPayload: GitHubActionPayload;
   GitHubRepositoryPayload: GitHubRepositoryPayload;
   GitHubPullRequestPayload: GitHubPullRequestPayload;
   GitHubPullRequestSelection: GitHubPullRequestSelection;
   RawEventQuery: RawEventQuery;
+  StreamAttachmentData: StreamAttachmentData;
 }>({
   stringFormats: {
     nonEmpty: (input: string): boolean => input.length > 0,
@@ -137,5 +177,7 @@ export const Parsers = parse.buildParsers<{
   numberFormats: {
     eventLimit: (input: number): boolean =>
       Number.isInteger(input) && input >= 1 && input <= 1_000,
+    waitMilliseconds: (input: number): boolean =>
+      Number.isInteger(input) && input >= 1 && input <= 55_000,
   },
 });

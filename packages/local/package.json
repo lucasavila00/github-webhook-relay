@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@beff/diy": "0.0.33",
-    "@github-webhook-relay/core": "workspace:*"
+    "@github-webhook-relay/core": "workspace:*",
+    "ws": "8.18.3"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
+    "@types/ws": "8.18.1",
     "typescript": "7.0.2",
     "vitest": "4.1.0"
   }

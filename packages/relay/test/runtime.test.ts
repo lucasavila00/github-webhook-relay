@@ -30,6 +30,15 @@ import {
   validateCursor,
   type EventStoreCapability,
 } from "../src/ingestion.ts";
+import {
+  createStreamSockets,
+  createStreamStore,
+  joinRepositoryFilter,
+  publishStoredEvent,
+  subscribeToEvents,
+  type StreamSocketsCapability,
+  type StreamStoreCapability,
+} from "../src/stream.ts";
 
 type SigningKeys = Readonly<{
   privateKey: CryptoKey;
@@ -75,7 +84,7 @@ const capabilities = Capabilities.create<
   http: { fetch: globalThis.fetch.bind(globalThis) },
 });
 
-const handleRelayRequest = (
+const handleAccessRequest = (
   testCapabilities: typeof capabilities,
   testConfiguration: typeof configuration,
   request: Request,
@@ -178,7 +187,34 @@ describe("relay Access boundary", () => {
     const token = await signToken(keys, validClaims());
     expect(await verifyAccessToken(capabilities, { audience: env.ACCESS_AUD, teamDomain: env.ACCESS_TEAM_DOMAIN }, [keys.publicJwk], token)).toEqual({ kind: "identity", subject: "identity-subject", email: "lucaxx@gmail.com" });
     expect(await capabilities.accessKeyStore.read(keyUrl)).toBeDefined();
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(200);
+    expect((await handleAccessRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(200);
+  });
+
+  it("uses the Access cookie when the assertion header is absent", async () => {
+    const keys = await createSigningKeys();
+    await installKey(keys);
+    const token = await signToken(keys, validClaims());
+    const request = new Request("https://relay.example.com/api/events", {
+      headers: { Cookie: `CF_Authorization=${token}` },
+    });
+
+    expect((await handleAccessRequest(capabilities, configuration, request)).status)
+      .toBe(200);
+  });
+
+  it("does not replace an invalid assertion with a valid Access cookie", async () => {
+    const keys = await createSigningKeys();
+    await installKey(keys);
+    const token = await signToken(keys, validClaims());
+    const request = new Request("https://relay.example.com/api/events", {
+      headers: {
+        "Cf-Access-Jwt-Assertion": "invalid",
+        Cookie: `CF_Authorization=${token}`,
+      },
+    });
+
+    expect((await handleAccessRequest(capabilities, configuration, request)).status)
+      .toBe(401);
   });
 
   it("accepts an identity token without an email claim", async () => {
@@ -186,7 +222,7 @@ describe("relay Access boundary", () => {
     await installKey(keys);
     const { email: _, ...claims } = validClaims();
     const token = await signToken(keys, claims);
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(200);
+    expect((await handleAccessRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(200);
   });
 
   it("accepts a signed service token without an email or subject", async () => {
@@ -199,14 +235,14 @@ describe("relay Access boundary", () => {
       iss: env.ACCESS_TEAM_DOMAIN,
       sub: "",
     });
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(200);
+    expect((await handleAccessRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(200);
   });
 
   it("rejects a token with a wrong audience", async () => {
     const keys = await createSigningKeys();
     await installKey(keys);
     const token = await signToken(keys, { ...validClaims(), aud: "wrong-audience" });
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(401);
+    expect((await handleAccessRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(401);
   });
 
   it("rejects a token with a wrong issuer or signature", async () => {
@@ -225,7 +261,7 @@ describe("relay Access boundary", () => {
 
     expect(
       (
-        await handleRelayRequest(
+        await handleAccessRequest(
           capabilities,
           configuration,
           authenticatedRequest(
@@ -237,7 +273,7 @@ describe("relay Access boundary", () => {
     ).toBe(401);
     expect(
       (
-        await handleRelayRequest(
+        await handleAccessRequest(
           capabilities,
           configuration,
           authenticatedRequest(
@@ -253,15 +289,15 @@ describe("relay Access boundary", () => {
     const keys = await createSigningKeys();
     await installKey(keys);
     const token = await signToken(keys, { ...validClaims(), exp: Math.floor(Date.now() / 1_000) - 1 });
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(401);
+    expect((await handleAccessRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(401);
   });
 
   it("rejects WebSocket access through an alternate hostname", async () => {
     const keys = await createSigningKeys();
     await installKey(keys);
     const token = await signToken(keys, validClaims());
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://alternate.example.com/api/events/stream", token, true))).status).toBe(403);
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events/stream", token, true))).status).toBe(404);
+    expect((await handleAccessRequest(capabilities, configuration, authenticatedRequest("https://alternate.example.com/api/events/stream", token, true))).status).toBe(403);
+    expect((await handleAccessRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events/stream", token, true))).status).toBe(101);
   });
 
   it("routes only the exact webhook POST without Access", async () => {
@@ -271,9 +307,9 @@ describe("relay Access boundary", () => {
         ? { method, body }
         : { method });
 
-    expect((await handleRelayRequest(capabilities, configuration, request("https://relay.example.com/webhooks/github", "POST"))).status).toBe(401);
-    expect((await handleRelayRequest(capabilities, configuration, request("https://alternate.example.com/webhooks/github", "POST"))).status).toBe(401);
-    expect((await handleRelayRequest(capabilities, configuration, request("https://relay.example.com/webhooks/github", "GET"))).status).toBe(401);
+    expect((await handleAccessRequest(capabilities, configuration, request("https://relay.example.com/webhooks/github", "POST"))).status).toBe(401);
+    expect((await handleAccessRequest(capabilities, configuration, request("https://alternate.example.com/webhooks/github", "POST"))).status).toBe(401);
+    expect((await handleAccessRequest(capabilities, configuration, request("https://relay.example.com/webhooks/github", "GET"))).status).toBe(401);
   });
 
   it("loads the SQLite Durable Object binding", async () => {
@@ -605,49 +641,6 @@ describe.sequential("authenticated event history", () => {
     });
   });
 
-  it("orders positions numerically across filtered lookahead pages", async () => {
-    for (let position = 1; position <= 8; position += 1) {
-      await send(
-        "issues",
-        `numeric-excluded-${position}`,
-        payload({ action: "opened" }, "other/repository"),
-      );
-    }
-    await send("issues", "numeric-match-9", payload({ action: "opened" }));
-    await send(
-      "issue_comment",
-      "numeric-excluded-10",
-      payload({ action: "created", comment: { id: 10 }, issue: { number: 1 } }),
-    );
-    await send("issues", "numeric-match-11", payload({ action: "opened" }));
-    await send(
-      "issues",
-      "numeric-excluded-12",
-      payload({ action: "opened" }, "other/repository"),
-    );
-    const access = await createAccessSession();
-
-    const first = await readHistory(
-      access,
-      "?repository=owner%2Frepository&type=issues&limit=1",
-    );
-    expect(await first.json()).toMatchObject({
-      events: [{ id: "event_9", deliveryId: "numeric-match-9" }],
-      cursor: "cursor_10",
-      hasMore: true,
-    });
-
-    const second = await readHistory(
-      access,
-      "?after=cursor_10&repository=owner%2Frepository&type=issues&limit=1",
-    );
-    expect(await second.json()).toMatchObject({
-      events: [{ id: "event_11", deliveryId: "numeric-match-11" }],
-      cursor: "cursor_12",
-      hasMore: false,
-    });
-  });
-
   it("advances an empty filtered page to the end of history", async () => {
     await send("issues", "excluded-1", payload({ action: "opened" }));
     await send("issues", "excluded-2", payload({ action: "opened" }));
@@ -659,6 +652,18 @@ describe.sequential("authenticated event history", () => {
       cursor: "cursor_2",
       hasMore: false,
     });
+  });
+
+  it("orders positions numerically after the log reaches two digits", async () => {
+    await insertEventFixtures(13);
+    const access = await createAccessSession();
+    const response = await readHistory(access, "?limit=13");
+    const page = await response.json() as {
+      events: ReadonlyArray<{ id: string }>;
+    };
+    expect(page.events.map(({ id }) => id)).toEqual(
+      Array.from({ length: 13 }, (_, index) => `event_${index + 1}`),
+    );
   });
 
   it.each([
@@ -708,6 +713,387 @@ describe.sequential("authenticated event history", () => {
   });
 });
 
+describe.sequential("authenticated event stream", () => {
+  afterEach(async () => {
+    await reset();
+  });
+
+  it("requires authentication before the WebSocket upgrade", async () => {
+    const response = await SELF.fetch("https://relay.test/api/events/stream", {
+      headers: { Upgrade: "websocket" },
+    });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      error: { code: "unauthorized" },
+    });
+  });
+
+  it("replays filtered history and continues live without a gap", async () => {
+    await send(
+      "issue_comment",
+      "stream-excluded",
+      payload({ action: "created", comment: { id: 1 }, issue: { number: 1 } }),
+    );
+    await send("issues", "stream-replay", payload({ action: "opened" }));
+    const socket = await openStream(await createAccessSession());
+    const replay = nextMessages(socket, 3);
+    socket.send(JSON.stringify({ type: "subscribe", filters: { type: "issues" } }));
+    expect(await replay).toMatchObject([
+      { type: "checkpoint", cursor: "cursor_1" },
+      { type: "event", event: { id: "event_2", deliveryId: "stream-replay" } },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+
+    const live = nextMessages(socket, 2);
+    await send("issues", "stream-live", payload({ action: "opened" }));
+    expect(await live).toMatchObject([
+      { type: "event", event: { id: "event_3", deliveryId: "stream-live" } },
+      { type: "checkpoint", cursor: "cursor_3" },
+    ]);
+
+    const reconnect = await openStream(await createAccessSession());
+    const repeated = nextMessages(reconnect, 2);
+    reconnect.send(JSON.stringify({ type: "subscribe", after: "cursor_2" }));
+    expect(await repeated).toMatchObject([
+      { type: "event", event: { id: "event_3", deliveryId: "stream-live" } },
+      { type: "checkpoint", cursor: "cursor_3" },
+    ]);
+    socket.close(1000, "Done.");
+    reconnect.close(1000, "Done.");
+  });
+
+  it("does not lose an event that arrives while replay starts", async () => {
+    await insertEventFixtures(100);
+    const socket = await openStream(await createAccessSession());
+    const messages = nextMessages(socket, 101);
+    socket.send(JSON.stringify({
+      type: "subscribe",
+      filters: { repository: "no-match" },
+    }));
+    const delivery = send("issues", "replay-race", payload({ action: "opened" }));
+    expect((await delivery).status).toBe(202);
+    expect(await messages).toEqual(
+      Array.from({ length: 101 }, (_, index) => ({
+        type: "checkpoint",
+        cursor: `cursor_${index + 1}`,
+      })),
+    );
+    socket.close(1000, "Done.");
+  });
+
+  it("keeps simultaneous subscription filters and cursors independent", async () => {
+    const access = await createAccessSession();
+    const issues = await openStream(access);
+    const comments = await openStream(access);
+    issues.send(JSON.stringify({ type: "subscribe", filters: { type: "issues" } }));
+    comments.send(JSON.stringify({
+      type: "subscribe",
+      filters: { type: "issue_comment" },
+    }));
+
+    const issueMessages = nextMessages(issues, 3);
+    const commentMessages = nextMessages(comments, 3);
+    await send("issues", "independent-issue", payload({ action: "opened" }));
+    await send(
+      "issue_comment",
+      "independent-comment",
+      payload({ action: "created", comment: { id: 2 }, issue: { number: 1 } }),
+    );
+    expect(await issueMessages).toMatchObject([
+      { type: "event", event: { deliveryId: "independent-issue" } },
+      { type: "checkpoint", cursor: "cursor_1" },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+    expect(await commentMessages).toMatchObject([
+      { type: "checkpoint", cursor: "cursor_1" },
+      { type: "event", event: { deliveryId: "independent-comment" } },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+    issues.close(1000, "Done.");
+    comments.close(1000, "Done.");
+    await waitForSubscriptionCount(0);
+  });
+
+  it.each([
+    [JSON.stringify({ type: "other" }), "invalid_request"],
+    [JSON.stringify({ type: "subscribe", after: "cursor_9" }), "invalid_cursor"],
+  ])("sends a public error and closes invalid subscription input", async (input, code) => {
+    const socket = await openStream(await createAccessSession());
+    const message = nextMessages(socket, 1);
+    const closed = nextClose(socket);
+    socket.send(input);
+    expect(await message).toMatchObject([{ type: "error", error: { code } }]);
+    expect(await closed).toMatchObject({ code: 1008 });
+  });
+
+  it("rejects a second subscription message", async () => {
+    const socket = await openStream(await createAccessSession());
+    const message = nextMessages(socket, 1);
+    const closed = nextClose(socket);
+    socket.send(JSON.stringify({ type: "subscribe" }));
+    socket.send(JSON.stringify({ type: "subscribe" }));
+    expect(await message).toEqual([{
+      type: "error",
+      error: {
+        code: "invalid_request",
+        message: "Only one subscription is allowed.",
+      },
+    }]);
+    expect(await closed).toMatchObject({ code: 1008 });
+    await waitForSubscriptionCount(0);
+  });
+
+  it("closes a socket that does not subscribe in ten seconds", async () => {
+    const socket = await openStream(await createAccessSession());
+    const message = nextMessages(socket, 1, 12_000);
+    const closed = nextClose(socket, 12_000);
+    expect(await message).toEqual([{
+      type: "error",
+      error: { code: "invalid_request", message: "Subscription required." },
+    }]);
+    expect(await closed).toMatchObject({ code: 1008 });
+  }, 15_000);
+
+  it("stores and reconstructs every repository filter code unit", async () => {
+    const repository = `${"a".repeat(15_999)}😀${"b".repeat(16_000)}\ud800`;
+    const socket = await openStream(await createAccessSession());
+    socket.send(JSON.stringify({ type: "subscribe", filters: { repository } }));
+    const checkpoint = nextMessages(socket, 1);
+    await send("issues", "chunk-progress", payload({ action: "opened" }));
+    expect(await checkpoint).toEqual([
+      { type: "checkpoint", cursor: "cursor_1" },
+    ]);
+    const chunks = await subscriptionChunks();
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(joinRepositoryFilter(chunks)).toBe(repository);
+    socket.close(1000, "Done.");
+  });
+
+  it("continues live delivery after hibernation eviction", async () => {
+    const socket = await openStream(await createAccessSession());
+    socket.send(JSON.stringify({ type: "subscribe" }));
+    const beforeEviction = nextMessages(socket, 2);
+    await send("issues", "before-eviction", payload({ action: "opened" }));
+    expect(await beforeEviction).toMatchObject([
+      { type: "event", event: { id: "event_1" } },
+      { type: "checkpoint", cursor: "cursor_1" },
+    ]);
+
+    await evictDurableObject(eventRelayStub());
+    const afterEviction = nextMessages(socket, 2);
+    await send("issues", "after-eviction", payload({ action: "opened" }));
+    expect(await afterEviction).toMatchObject([
+      { type: "event", event: { id: "event_2" } },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+    socket.close(1000, "Done.");
+  });
+
+  it("streams retained rows larger than the Durable Object memory limit", async () => {
+    await insertLargeEventFixtures(65, 2 * 1024 * 1024);
+    const socket = await openStream(await createAccessSession());
+    const checkpoints = nextMessages(socket, 65, 20_000);
+    socket.send(JSON.stringify({
+      type: "subscribe",
+      filters: { repository: "no-match" },
+    }));
+    const received = await checkpoints;
+    expect(received[64]).toEqual({
+      type: "checkpoint",
+      cursor: "cursor_65",
+    });
+    socket.close(1000, "Done.");
+  }, 30_000);
+
+  it("closes before a large event that would exceed the byte budget", async () => {
+    await insertLargeEventFixtures(2, 5 * 1024 * 1024);
+    const socket = await openStream(await createAccessSession());
+    const first = nextMessages(socket, 2, 15_000);
+    const closed = nextClose(socket, 15_000);
+    socket.send(JSON.stringify({ type: "subscribe" }));
+    expect(await first).toMatchObject([
+      { type: "event", event: { id: "event_1" } },
+      { type: "checkpoint", cursor: "cursor_1" },
+    ]);
+    expect(await closed).toMatchObject({ code: 1013 });
+
+    const reconnect = await openStream(await createAccessSession());
+    const replay = nextMessages(reconnect, 2, 15_000);
+    reconnect.send(JSON.stringify({ type: "subscribe", after: "cursor_1" }));
+    expect(await replay).toMatchObject([
+      { type: "event", event: { id: "event_2" } },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+  }, 30_000);
+
+  it("checkpoints a filtered event before it defers an oversized event", async () => {
+    await send(
+      "issues",
+      "filtered-before-large",
+      payload({ action: "opened" }, "other/repository"),
+    );
+    await insertLargeEventFixtures(1, 8 * 1024 * 1024 - 128, "r");
+    const socket = await openStream(await createAccessSession());
+    const checkpoint = nextMessages(socket, 1, 20_000);
+    const closed = nextClose(socket, 20_000);
+    socket.send(JSON.stringify({
+      type: "subscribe",
+      filters: { repository: "r" },
+    }));
+    expect(await checkpoint).toEqual([
+      { type: "checkpoint", cursor: "cursor_1" },
+    ]);
+    expect(await closed).toMatchObject({ code: 1013 });
+
+    const reconnect = await openStream(await createAccessSession());
+    const replay = nextMessages(reconnect, 2, 20_000);
+    reconnect.send(JSON.stringify({
+      type: "subscribe",
+      after: "cursor_1",
+      filters: { repository: "r" },
+    }));
+    expect(await replay).toMatchObject([
+      { type: "event", event: { id: "event_2" } },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+  }, 30_000);
+
+  it("delivers one retained event larger than the byte budget", async () => {
+    await insertLargeEventFixtures(1, 8 * 1024 * 1024 - 128, "r");
+    const socket = await openStream(await createAccessSession());
+    const messages = nextMessages(socket, 2, 20_000);
+    const closed = nextClose(socket, 20_000);
+    socket.send(JSON.stringify({ type: "subscribe" }));
+    expect(await messages).toMatchObject([
+      { type: "event", event: { id: "event_1" } },
+      { type: "checkpoint", cursor: "cursor_1" },
+    ]);
+    expect(await closed).toMatchObject({ code: 1013 });
+  }, 30_000);
+
+  it("keeps a healthy consumer live when another socket fails", async () => {
+    const access = await createAccessSession();
+    const failed = await openStream(access);
+    const healthy = await openStream(access);
+    failed.send(JSON.stringify({ type: "subscribe" }));
+    healthy.send(JSON.stringify({ type: "subscribe" }));
+
+    const failedReady = nextMessages(failed, 2);
+    const healthyReady = nextMessages(healthy, 2);
+    expect((await send(
+      "issues",
+      "before-socket-failure",
+      payload({ action: "opened" }),
+    )).status).toBe(202);
+    await Promise.all([failedReady, healthyReady]);
+
+    failed.close(1000, "Disconnect.");
+    const delivered = nextMessages(healthy, 2);
+    expect((await send(
+      "issues",
+      "after-socket-failure",
+      payload({ action: "opened" }),
+    )).status).toBe(202);
+    expect(await delivered).toMatchObject([
+      { type: "event", event: { deliveryId: "after-socket-failure" } },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+    expect((await readRows()).map(({ delivery_id }) => delivery_id)).toEqual([
+      "before-socket-failure",
+      "after-socket-failure",
+    ]);
+    await waitForSubscriptionCount(1);
+    healthy.close(1000, "Done.");
+    await waitForSubscriptionCount(0);
+  });
+
+  it("contains a real failed socket before it sends to the next socket", async () => {
+    const messages = await runInDurableObject<EventRelay, ReadonlyArray<unknown>>(
+      eventRelayStub(),
+      async (_instance, state) => {
+        const failedPair = new WebSocketPair();
+        const healthyPair = new WebSocketPair();
+        const failedClient = failedPair[0];
+        const failedServer = failedPair[1];
+        const healthyClient = healthyPair[0];
+        const healthyServer = healthyPair[1];
+        state.acceptWebSocket(failedServer);
+        state.acceptWebSocket(healthyServer);
+        failedClient.accept();
+        healthyClient.accept();
+
+        const actualSockets = createStreamSockets(state);
+        const capabilities = Capabilities.create<
+          StreamStoreCapability | StreamSocketsCapability
+        >({
+          streamStore: createStreamStore(state.storage),
+          streamSockets: {
+            ...actualSockets,
+            list: () => [failedServer, healthyServer],
+          },
+        });
+        subscribeToEvents(
+          capabilities,
+          failedServer,
+          "failed-connection",
+          JSON.stringify({ type: "subscribe" }),
+        );
+        subscribeToEvents(
+          capabilities,
+          healthyServer,
+          "healthy-connection",
+          JSON.stringify({ type: "subscribe" }),
+        );
+
+        const received = nextMessages(healthyClient, 2);
+        failedServer.close(1000, "Failed.");
+        const result = createEventStore(state.storage).append({
+          deliveryId: "isolated-socket-failure",
+          eventType: "issues",
+          repository: "owner/repository",
+          receivedAt: "2026-10-10T13:00:00Z",
+          payload: encoder.encode(payload({ action: "opened" })).buffer,
+        });
+        publishStoredEvent(capabilities, result.position);
+        return received;
+      },
+    );
+    expect(messages).toMatchObject([
+      { type: "event", event: { deliveryId: "isolated-socket-failure" } },
+      { type: "checkpoint", cursor: "cursor_1" },
+    ]);
+  });
+
+  it("closes at the position budget and replays the next position", async () => {
+    await insertEventFixtures(1_001);
+    const socket = await openStream(await createAccessSession());
+    const messages = nextMessages(socket, 1_000, 15_000);
+    const closed = nextClose(socket, 15_000);
+    socket.send(JSON.stringify({
+      type: "subscribe",
+      filters: { repository: "no-match" },
+    }));
+    const received = await messages;
+    expect(received[999]).toEqual({
+      type: "checkpoint",
+      cursor: "cursor_1000",
+    });
+    expect(await closed).toMatchObject({ code: 1013 });
+
+    const reconnect = await openStream(await createAccessSession());
+    const resumed = nextMessages(reconnect, 1);
+    reconnect.send(JSON.stringify({
+      type: "subscribe",
+      after: "cursor_1000",
+      filters: { repository: "no-match" },
+    }));
+    expect(await resumed).toEqual([
+      { type: "checkpoint", cursor: "cursor_1001" },
+    ]);
+    reconnect.close(1000, "Done.");
+  }, 20_000);
+});
+
 type StoredRow = Readonly<{
   position: string;
   delivery_id: string;
@@ -730,7 +1116,7 @@ async function readRows(): Promise<ReadonlyArray<StoredRow>> {
       `SELECT CAST(position AS TEXT) AS position,
               delivery_id, event_type, payload
        FROM events
-       ORDER BY events.position`,
+       ORDER BY position`,
     ).toArray(),
   );
 }
@@ -896,5 +1282,144 @@ function readHistory(access: AccessSession, query: string): Promise<Response> {
     new Request(`https://relay.test/api/events${query}`, {
       headers: { "Cf-Access-Jwt-Assertion": access.token },
     }),
+  );
+}
+
+async function openStream(access: AccessSession): Promise<WebSocket> {
+  const response = await handleRelayRuntimeRequest(
+    accessCapabilities,
+    {
+      accessAudience: env.ACCESS_AUD,
+      accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
+      relayHostname: env.RELAY_HOSTNAME,
+    },
+    env.EVENT_RELAY,
+    new Request("https://relay.test/api/events/stream", {
+      headers: {
+        "Cf-Access-Jwt-Assertion": access.token,
+        Upgrade: "websocket",
+      },
+    }),
+  );
+  if (response.status !== 101 || response.webSocket === null) {
+    throw new Error(`WebSocket upgrade failed with status ${response.status}.`);
+  }
+  response.webSocket.accept();
+  return response.webSocket;
+}
+
+function nextMessages(
+  socket: WebSocket,
+  count: number,
+  timeout = 5_000,
+): Promise<ReadonlyArray<unknown>> {
+  return new Promise((resolve, reject) => {
+    let messages: ReadonlyArray<unknown> = [];
+    const timer = setTimeout(() => {
+      socket.removeEventListener("message", receive);
+      reject(new Error(`Received ${messages.length} of ${count} messages.`));
+    }, timeout);
+    const receive = (event: MessageEvent): void => {
+      if (typeof event.data !== "string") {
+        clearTimeout(timer);
+        reject(new Error("The stream message was not text."));
+        return;
+      }
+      messages = [...messages, JSON.parse(event.data) as unknown];
+      if (messages.length === count) {
+        clearTimeout(timer);
+        socket.removeEventListener("message", receive);
+        resolve(messages);
+      }
+    };
+    socket.addEventListener("message", receive);
+  });
+}
+
+function nextClose(socket: WebSocket, timeout = 5_000): Promise<CloseEvent> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("The stream did not close.")),
+      timeout,
+    );
+    socket.addEventListener("close", (event) => {
+      clearTimeout(timer);
+      resolve(event);
+    }, { once: true });
+  });
+}
+
+async function subscriptionCount(): Promise<number> {
+  return runInDurableObject<EventRelay, number>(
+    eventRelayStub(),
+    (_instance, state) => state.storage.sql.exec<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM subscriptions",
+    ).one().count,
+  );
+}
+
+async function waitForSubscriptionCount(expected: number): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (await subscriptionCount() === expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Subscription count did not become ${expected}.`);
+}
+
+async function subscriptionChunks(): Promise<ReadonlyArray<string>> {
+  return runInDurableObject<EventRelay, ReadonlyArray<string>>(
+    eventRelayStub(),
+    (_instance, state) => state.storage.sql.exec<{ value: string }>(
+      `SELECT value FROM subscription_repository_chunks
+       ORDER BY sequence`,
+    ).toArray().map(({ value }) => value),
+  );
+}
+
+async function insertEventFixtures(count: number): Promise<void> {
+  await runInDurableObject<EventRelay, void>(
+    eventRelayStub(),
+    (_instance, state) => {
+      state.storage.transactionSync(() => {
+        for (let position = 1; position <= count; position += 1) {
+          state.storage.sql.exec(
+            `INSERT INTO events (
+              delivery_id, event_type, repository, received_at, payload
+            ) VALUES (?, ?, ?, ?, ?)`,
+            `fixture-${position}`,
+            "issues",
+            "owner/repository",
+            "2026-10-10T13:00:00Z",
+            encoder.encode(payload({ action: "opened" })).buffer,
+          );
+        }
+      });
+    },
+  );
+}
+
+async function insertLargeEventFixtures(
+  count: number,
+  payloadBytes: number,
+  repository = "owner/repository",
+): Promise<void> {
+  const padding = "x".repeat(payloadBytes - 14);
+  const body = encoder.encode(JSON.stringify({ padding })).buffer;
+  await runInDurableObject<EventRelay, void>(
+    eventRelayStub(),
+    (_instance, state) => {
+      for (let position = 1; position <= count; position += 1) {
+        state.storage.sql.exec(
+          `INSERT INTO events (
+            delivery_id, event_type, repository, received_at, payload
+          ) VALUES (?, ?, ?, ?, ?)`,
+          `large-fixture-${position}`,
+          "issues",
+          repository,
+          "2026-10-10T13:00:00Z",
+          body,
+        );
+      }
+    },
   );
 }
