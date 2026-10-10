@@ -105,6 +105,14 @@ export type WatchToolInput = Readonly<{
 export type AcknowledgeToolInput = Readonly<{
   acknowledgement: Readonly<{ value: NonEmptyString }>;
 }>;
+export type Acknowledgement = Readonly<{ value: string }>;
+export type WatchResult =
+  | Readonly<{
+      type: "batch";
+      events: ReadonlyArray<Event>;
+      acknowledgement: Acknowledgement;
+    }>
+  | Readonly<{ type: "timeout" }>;
 
 export type GitHubActionPayload = Readonly<{ action: string }>;
 export type GitHubRepositoryPayload = Readonly<{
@@ -136,7 +144,10 @@ export const Parsers = parse.buildParsers<{
   HttpError: HttpError;
   StreamMessage: StreamMessage;
   LocalConfig: LocalConfig;
+  PendingBatch: PendingBatch;
   ConsumerState: ConsumerState;
+  Acknowledgement: Acknowledgement;
+  WatchResult: WatchResult;
   WatchToolInput: WatchToolInput;
   AcknowledgeToolInput: AcknowledgeToolInput;
   GitHubActionPayload: GitHubActionPayload;
