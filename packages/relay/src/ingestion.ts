@@ -1,0 +1,208 @@
+import type { Capability, Capabilities } from "@beff/diy/capabilities";
+import type { EventType } from "@github-webhook-relay/contracts";
+
+import { GitHubParsers } from "./github.ts";
+
+export type StoredDelivery = Readonly<{
+  deliveryId: string;
+  eventType: EventType;
+  repository: string;
+  receivedAt: string;
+  payload: ArrayBuffer;
+}>;
+
+type Cryptography = Readonly<{
+  verify: (body: ArrayBuffer, signature: Uint8Array<ArrayBuffer>) => Promise<boolean>;
+}>;
+
+export type EventStore = Readonly<{
+  append: (delivery: StoredDelivery) => string;
+  hasPosition: (position: string) => boolean;
+}>;
+
+type Clock = Readonly<{
+  now: () => string;
+}>;
+
+export type CryptographyCapability = Capability<"cryptography", Cryptography>;
+export type EventStoreCapability = Capability<"eventStore", EventStore>;
+export type ClockCapability = Capability<"clock", Clock>;
+type IngestionCapabilities =
+  | CryptographyCapability
+  | EventStoreCapability
+  | ClockCapability;
+
+type SelectedPayload = Readonly<{
+  type: EventType;
+  repository: string;
+}>;
+
+type Selection =
+  | Readonly<{ kind: "ignored" }>
+  | Readonly<{ kind: "invalid" }>
+  | Readonly<{ kind: "selected"; value: SelectedPayload }>;
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+export async function ingestGitHubWebhook(
+  capabilities: Capabilities<IngestionCapabilities>,
+  request: Request,
+): Promise<Response> {
+  const signature = parseSignature(request.headers.get("x-hub-signature-256"));
+  if (signature === undefined) {
+    return new Response(null, { status: 401 });
+  }
+
+  const body = await request.arrayBuffer();
+  if (!(await capabilities.cryptography.verify(body, signature))) {
+    return new Response(null, { status: 401 });
+  }
+
+  const payload = parseJsonObject(body);
+  if (payload === undefined) {
+    return new Response(null, { status: 400 });
+  }
+
+  const deliveryId = request.headers.get("x-github-delivery");
+  const githubEvent = request.headers.get("x-github-event");
+  if (deliveryId === null || deliveryId.length === 0 || githubEvent === null || githubEvent.length === 0) {
+    return new Response(null, { status: 400 });
+  }
+
+  const selection = selectGitHubEvent(githubEvent, payload);
+  if (selection.kind === "ignored") {
+    return new Response(null, { status: 204 });
+  }
+  if (selection.kind === "invalid") {
+    return new Response(null, { status: 400 });
+  }
+
+  try {
+    capabilities.eventStore.append({
+      deliveryId,
+      eventType: selection.value.type,
+      repository: selection.value.repository,
+      receivedAt: capabilities.clock.now(),
+      payload: body,
+    });
+    return new Response(null, { status: 202 });
+  } catch {
+    return new Response(null, { status: 500 });
+  }
+}
+
+export function selectGitHubEvent(
+  githubEvent: string,
+  payload: Readonly<Record<string, unknown>>,
+): Selection {
+  const actionResult = GitHubParsers.GitHubActionPayload.safeParse(payload);
+  if (!actionResult.success) {
+    return { kind: "ignored" };
+  }
+
+  const type = selectedType(githubEvent, actionResult.data.action);
+  if (type === undefined) {
+    return { kind: "ignored" };
+  }
+
+  if (type === "pull_request") {
+    const selectionResult = GitHubParsers.GitHubPullRequestSelection.safeParse(payload);
+    if (!selectionResult.success || !selectionResult.data.pull_request.merged) {
+      return { kind: "ignored" };
+    }
+    const result = GitHubParsers.GitHubPullRequestPayload.safeParse(payload);
+    return result.success
+      ? selected(type, result.data.repository.full_name)
+      : { kind: "invalid" };
+  }
+
+  const result = GitHubParsers.GitHubRepositoryPayload.safeParse(payload);
+  return result.success
+    ? selected(type, result.data.repository.full_name)
+    : { kind: "invalid" };
+}
+
+export function eventId(position: string): string {
+  return `event_${position}`;
+}
+
+export function cursor(position: string): string {
+  return `cursor_${position}`;
+}
+
+export function validateCursor(
+  capabilities: Capabilities<EventStoreCapability>,
+  value: string,
+): boolean {
+  const match = /^cursor_(0|[1-9][0-9]*)$/.exec(value);
+  if (match === null) {
+    return false;
+  }
+  const position = match[1];
+  return position === "0" ||
+    (position !== undefined && capabilities.eventStore.hasPosition(position));
+}
+
+export function createCryptography(secret: string): Cryptography {
+  return {
+    verify: async (body, signature) => {
+      const key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["verify"],
+      );
+      return crypto.subtle.verify("HMAC", key, signature, body);
+    },
+  };
+}
+
+function parseSignature(value: string | null): Uint8Array<ArrayBuffer> | undefined {
+  const match = /^sha256=([0-9a-fA-F]{64})$/.exec(value ?? "");
+  if (match === null) {
+    return undefined;
+  }
+  const hex = match[1];
+  if (hex === undefined) {
+    return undefined;
+  }
+  const bytes = new Uint8Array(32);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function parseJsonObject(
+  body: ArrayBuffer,
+): Readonly<Record<string, unknown>> | undefined {
+  try {
+    const value: unknown = JSON.parse(decoder.decode(body));
+    return isJsonObject(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isJsonObject(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function selectedType(githubEvent: string, action: string): EventType | undefined {
+  if (githubEvent === "issues" && action === "opened") return "issues";
+  if (githubEvent === "issue_comment" && action === "created") return "issue_comment";
+  if (githubEvent === "pull_request_review_comment" && action === "created") {
+    return "pull_request_review_comment";
+  }
+  if (githubEvent === "pull_request" && action === "closed") return "pull_request";
+  return undefined;
+}
+
+function selected(
+  type: EventType,
+  repository: string,
+): Selection {
+  return { kind: "selected", value: { type, repository } };
+}

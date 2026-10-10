@@ -1,0 +1,4 @@
+{
+  "parser": "./src/github.ts",
+  "outputDir": "./src/generated"
+}
