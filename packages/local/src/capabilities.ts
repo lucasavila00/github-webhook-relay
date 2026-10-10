@@ -10,7 +10,7 @@ export type Clock = Readonly<{
 
 export type FileStorage = Readonly<{
   ensureDirectory: (path: string) => Promise<void>;
-  read: (path: string) => Promise<string | undefined>;
+  read: (path: string) => Promise<string | null | undefined>;
   writeAtomic: (path: string, value: string) => Promise<void>;
 }>;
 

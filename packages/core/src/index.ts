@@ -54,7 +54,7 @@ export type WatchRequest = Readonly<{
   consumer: string;
   filters: EventFilters;
   waitMilliseconds: number;
-  signal?: AbortSignal;
+  signal: AbortSignal | null | undefined;
 }>;
 
 export type WatchResult =
@@ -70,19 +70,17 @@ export const MAX_EVENT_LIMIT = 1_000;
 const defaultEventLimit = Parsers.EventLimit.parse(DEFAULT_EVENT_LIMIT);
 
 export type NormalizedEventQuery = Readonly<{
-  after?: Cursor;
+  after: Cursor | null | undefined;
   filters: EventFilters;
   limit: EventLimit;
 }>;
 
 export function normalizeEventQuery(query: EventQuery): NormalizedEventQuery {
   return {
-    ...(query.after === undefined ? {} : { after: query.after }),
+    after: query.after,
     filters: {
-      ...(query.repository === undefined
-        ? {}
-        : { repository: query.repository }),
-      ...(query.type === undefined ? {} : { type: query.type }),
+      repository: query.repository,
+      type: query.type,
     },
     limit: query.limit ?? defaultEventLimit,
   };
@@ -117,8 +115,8 @@ export function createEventPage(
 
 function matchesFilters(event: Event, filters: EventFilters): boolean {
   return (
-    (filters.repository === undefined ||
+    (filters.repository == null ||
       event.repository === filters.repository) &&
-    (filters.type === undefined || event.type === filters.type)
+    (filters.type == null || event.type === filters.type)
   );
 }

@@ -4,7 +4,7 @@ import { Parsers, type AccessKeySet } from "@github-webhook-relay/core";
 type HttpClient = Readonly<{ fetch: typeof fetch }>;
 type Clock = Readonly<{ now: () => number }>;
 type AccessKeyStore = Readonly<{
-  read: (url: string) => Promise<unknown | undefined>;
+  read: (url: string) => Promise<unknown | null | undefined>;
   write: (url: string, value: unknown) => Promise<void>;
 }>;
 type CryptoService = Readonly<{
@@ -26,7 +26,7 @@ export type AccessConfiguration = Readonly<{
 }>;
 
 export type AccessPrincipal =
-  | Readonly<{ kind: "identity"; subject: string; email?: string }>
+  | Readonly<{ kind: "identity"; subject: string; email: string | null | undefined }>
   | Readonly<{ kind: "service"; clientId: string }>;
 
 type AccessKey = AccessKeySet["keys"][number];
@@ -37,8 +37,8 @@ type ParsedToken = Readonly<{
   header: Readonly<{ kid: string }>;
   payload: Readonly<{
     aud: string | ReadonlyArray<string>;
-    commonName?: string;
-    email?: string;
+    commonName: string | null | undefined;
+    email: string | null | undefined;
     exp: number;
     issuer: string;
     subject: string;
@@ -48,7 +48,7 @@ type ParsedToken = Readonly<{
 
 const decodeBase64Url = (
   value: string,
-): Uint8Array<ArrayBuffer> | undefined => {
+): Uint8Array<ArrayBuffer> | null | undefined => {
   try {
     const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
     const decoded = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
@@ -64,7 +64,7 @@ const decodeBase64Url = (
 
 const decodeJson = (value: string): unknown => {
   const bytes = decodeBase64Url(value);
-  if (bytes === undefined) return undefined;
+  if (bytes == null) return undefined;
   try {
     return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
   } catch {
@@ -72,16 +72,16 @@ const decodeJson = (value: string): unknown => {
   }
 };
 
-const parseToken = (token: string): ParsedToken | undefined => {
+const parseToken = (token: string): ParsedToken | null | undefined => {
   const parts = token.split(".");
   if (parts.length !== 3) return undefined;
   const encodedHeader = parts[0];
   const encodedPayload = parts[1];
   const encodedSignature = parts[2];
   if (
-    encodedHeader === undefined ||
-    encodedPayload === undefined ||
-    encodedSignature === undefined
+    encodedHeader == null ||
+    encodedPayload == null ||
+    encodedSignature == null
   ) return undefined;
 
   const headerResult = Parsers.AccessJwtHeader.safeParse(decodeJson(encodedHeader));
@@ -89,7 +89,7 @@ const parseToken = (token: string): ParsedToken | undefined => {
     decodeJson(encodedPayload),
   );
   const signature = decodeBase64Url(encodedSignature);
-  if (!headerResult.success || !payloadResult.success || signature === undefined) {
+  if (!headerResult.success || !payloadResult.success || signature == null) {
     return undefined;
   }
   const payload = payloadResult.data;
@@ -102,10 +102,8 @@ const parseToken = (token: string): ParsedToken | undefined => {
       exp: payload.exp,
       issuer: payload.iss,
       subject: payload.sub,
-      ...(payload.common_name === undefined
-        ? {}
-        : { commonName: payload.common_name }),
-      ...(payload.email === undefined ? {} : { email: payload.email }),
+      commonName: payload.common_name,
+      email: payload.email,
     },
     signature,
   };
@@ -113,7 +111,7 @@ const parseToken = (token: string): ParsedToken | undefined => {
 
 const parseAccessKeys = (
   value: unknown,
-): ReadonlyArray<AccessKey> | undefined => {
+): ReadonlyArray<AccessKey> | null | undefined => {
   const result = Parsers.AccessKeySet.safeParse(value);
   return result.success ? result.data.keys : undefined;
 };
@@ -121,18 +119,18 @@ const parseAccessKeys = (
 const normalizeTeamDomain = (teamDomain: string): string =>
   teamDomain.endsWith("/") ? teamDomain.slice(0, -1) : teamDomain;
 
-const getPrincipal = (token: ParsedToken): AccessPrincipal | undefined => {
+const getPrincipal = (token: ParsedToken): AccessPrincipal | null | undefined => {
   if (token.payload.subject.length > 0) {
     return {
       kind: "identity",
       subject: token.payload.subject,
-      ...(token.payload.email === undefined ? {} : { email: token.payload.email }),
+      email: token.payload.email,
     };
   }
   if (
     token.payload.subject === "" &&
-    token.payload.email === undefined &&
-    token.payload.commonName !== undefined &&
+    token.payload.email == null &&
+    token.payload.commonName != null &&
     token.payload.commonName.length > 0
   ) {
     return { kind: "service", clientId: token.payload.commonName };
@@ -152,9 +150,9 @@ export async function verifyAccessToken(
   configuration: AccessConfiguration,
   keys: ReadonlyArray<AccessKey>,
   token: string,
-): Promise<AccessPrincipal | undefined> {
+): Promise<AccessPrincipal | null | undefined> {
   const parsed = parseToken(token);
-  if (parsed === undefined) return undefined;
+  if (parsed == null) return undefined;
   const issuer = normalizeTeamDomain(configuration.teamDomain);
   if (
     parsed.payload.issuer !== issuer ||
@@ -163,7 +161,7 @@ export async function verifyAccessToken(
   ) return undefined;
 
   const key = keys.find((candidate) => candidate.kid === parsed.header.kid);
-  if (key === undefined) return undefined;
+  if (key == null) return undefined;
 
   try {
     const cryptoKey = await capabilities.crypto.importKey(
@@ -191,17 +189,17 @@ export async function verifyAccessToken(
 async function getAccessKeys(
   capabilities: Capabilities<HttpCapability | AccessKeyStoreCapability>,
   teamDomain: string,
-): Promise<ReadonlyArray<AccessKey> | undefined> {
+): Promise<ReadonlyArray<AccessKey> | null | undefined> {
   const keyUrl = `${normalizeTeamDomain(teamDomain)}/cdn-cgi/access/certs`;
   const stored = await capabilities.accessKeyStore.read(keyUrl);
   const storedKeys = parseAccessKeys(stored);
-  if (storedKeys !== undefined) return storedKeys;
+  if (storedKeys != null) return storedKeys;
 
   const response = await capabilities.http.fetch(keyUrl);
   if (!response.ok) return undefined;
   const value: unknown = await response.json();
   const keys = parseAccessKeys(value);
-  if (keys === undefined) return undefined;
+  if (keys == null) return undefined;
   await capabilities.accessKeyStore.write(keyUrl, value);
   return keys;
 }
@@ -215,11 +213,11 @@ export async function authenticateAccessRequest(
   >,
   configuration: AccessConfiguration,
   request: Request,
-): Promise<AccessPrincipal | undefined> {
+): Promise<AccessPrincipal | null | undefined> {
   const token = request.headers.get("Cf-Access-Jwt-Assertion");
-  if (token === null) return undefined;
+  if (token == null) return undefined;
   const keys = await getAccessKeys(capabilities, configuration.teamDomain);
-  return keys === undefined
+  return keys == null
     ? undefined
     : verifyAccessToken(capabilities, configuration, keys, token);
 }

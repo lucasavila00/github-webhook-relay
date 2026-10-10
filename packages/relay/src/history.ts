@@ -60,12 +60,12 @@ export function parseEventHistoryQuery(url: URL): QueryResult {
   if (!rawResult.success) return { kind: "invalid_request" };
 
   const raw = rawResult.data;
-  const limit = raw.limit === undefined ? undefined : Number(raw.limit);
+  const limit = raw.limit == null ? undefined : Number(raw.limit);
   const result = Parsers.EventQuery.safeParse({
-    ...(raw.after === undefined ? {} : { after: raw.after }),
-    ...(raw.repository === undefined ? {} : { repository: raw.repository }),
-    ...(raw.type === undefined ? {} : { type: raw.type }),
-    ...(limit === undefined ? {} : { limit }),
+    ...(raw.after == null ? {} : { after: raw.after }),
+    ...(raw.repository == null ? {} : { repository: raw.repository }),
+    ...(raw.type == null ? {} : { type: raw.type }),
+    ...(limit == null ? {} : { limit }),
   });
   if (!result.success) return { kind: "invalid_request" };
 
@@ -119,13 +119,13 @@ function readHistory(
   query: HistoryQuery,
 ): HistoryResult {
   const after = parseCursorPosition(query.after);
-  if (after === undefined || !hasPosition(storage, after)) {
+  if (after == null || !hasPosition(storage, after)) {
     return { kind: "invalid_cursor" };
   }
 
   const rows = selectRows(storage, after, query.filters, query.limit + 1);
   const lookahead = rows[query.limit];
-  const cursorPosition = lookahead === undefined
+  const cursorPosition = lookahead == null
     ? lastPosition(storage) ?? after
     : lastPositionBefore(storage, lookahead.position) ?? after;
   const events = rows.slice(0, query.limit).map(toEvent);
@@ -134,7 +134,7 @@ function readHistory(
     page: {
       events,
       cursor: Parsers.Cursor.parse(cursor(cursorPosition)),
-      hasMore: lookahead !== undefined,
+      hasMore: lookahead != null,
     },
   };
 }
@@ -145,14 +145,14 @@ function rawEventQuery(parameters: URLSearchParams): RawEventQuery {
   const repository = parameters.get("repository");
   const type = parameters.get("type");
   return {
-    ...(after === null ? {} : { after }),
-    ...(limit === null ? {} : { limit }),
-    ...(repository === null ? {} : { repository }),
-    ...(type === null ? {} : { type }),
+    after,
+    limit,
+    repository,
+    type,
   };
 }
 
-function parseCursorPosition(value: string): string | undefined {
+function parseCursorPosition(value: string): string | null | undefined {
   return /^cursor_(0|[1-9][0-9]*)$/u.exec(value)?.[1];
 }
 
@@ -170,14 +170,14 @@ function selectRows(
   filters: EventFilters,
   limit: number,
 ): ReadonlyArray<StoredEventRow> {
-  const repositoryClause = filters.repository === undefined
+  const repositoryClause = filters.repository == null
     ? ""
     : " AND repository = ?";
-  const typeClause = filters.type === undefined ? "" : " AND event_type = ?";
+  const typeClause = filters.type == null ? "" : " AND event_type = ?";
   const parameters = [
     after,
-    ...(filters.repository === undefined ? [] : [filters.repository]),
-    ...(filters.type === undefined ? [] : [filters.type]),
+    ...(filters.repository == null ? [] : [filters.repository]),
+    ...(filters.type == null ? [] : [filters.type]),
     limit,
   ];
   return storage.sql.exec<StoredEventRow>(
@@ -195,22 +195,24 @@ function selectRows(
   ).toArray();
 }
 
-function lastPosition(storage: DurableObjectStorage): string | undefined {
+function lastPosition(storage: DurableObjectStorage): string | null | undefined {
+  // oxlint-disable-next-line local/no-incomplete-nullish-types -- D1 SQL result values cannot be undefined.
   return storage.sql.exec<{ position: string | null }>(
     "SELECT CAST(MAX(position) AS TEXT) AS position FROM events",
-  ).one().position ?? undefined;
+  ).one().position;
 }
 
 function lastPositionBefore(
   storage: DurableObjectStorage,
   before: string,
-): string | undefined {
+): string | null | undefined {
+  // oxlint-disable-next-line local/no-incomplete-nullish-types -- D1 SQL result values cannot be undefined.
   return storage.sql.exec<{ position: string | null }>(
     `SELECT CAST(MAX(position) AS TEXT) AS position
      FROM events
      WHERE position < ?`,
     before,
-  ).one().position ?? undefined;
+  ).one().position;
 }
 
 export function toEvent(row: StoredEventRow): Event {
