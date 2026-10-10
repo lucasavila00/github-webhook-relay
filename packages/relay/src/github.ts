@@ -33,10 +33,18 @@ export type RawEventQuery = Readonly<{
   type?: string;
 }>;
 
+export type StreamAttachmentData = Readonly<{
+  bytes: number;
+  connectionKey: string;
+  cursor: string;
+  positions: number;
+}>;
+
 export const GitHubParsers = parse.buildParsers<{
   GitHubActionPayload: GitHubActionPayload;
   GitHubRepositoryPayload: GitHubRepositoryPayload;
   GitHubPullRequestPayload: GitHubPullRequestPayload;
   GitHubPullRequestSelection: GitHubPullRequestSelection;
   RawEventQuery: RawEventQuery;
+  StreamAttachmentData: StreamAttachmentData;
 }>();
