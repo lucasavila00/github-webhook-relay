@@ -1,6 +1,6 @@
 # Workspace
 
-The repository is a pnpm workspace with five packages:
+The repository is a pnpm workspace with six packages:
 
 | Path | Package | Owner |
 | --- | --- | --- |
