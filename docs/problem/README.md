@@ -28,14 +28,12 @@ cause duplicate work.
 ## Access from the browser and local machine
 
 The product is for Lucas alone. Shared access and multiple user accounts are
-outside its scope. The webapp provides event browsing through a server with
-authentication. The
-local Codex integration consumes the same event history and live stream.
-Both need authorized access. Local credentials must be revocable.
+outside its scope. Cloudflare Access protects browser access, and only Lucas
+can use it. The local tool uses a revocable Cloudflare Access service token.
 
 The local machine connects outbound. It must not need a public listening port
-or be online when GitHub sends a webhook. Event storage and delivery continue
-while the local consumer is disconnected.
+or a Cloudflare Tunnel, and it can be offline when GitHub sends a webhook.
+Event storage and delivery continue while the local consumer is disconnected.
 
 ## Events and actions
 
@@ -51,8 +49,10 @@ The events in scope are:
 - Merging of a pull request.
 
 These events must be available to the local Codex integration. The exact
-Codex action for each event and how it connects to existing local work still
-need a product definition.
+integration is a local `gh-watch` tool that an existing Codex session calls.
+The call waits for repository events, then returns the events and a cursor.
+Each consumer keeps its own progress. The tool does not launch, wake, resume,
+or control a Codex session, and it does not take an action automatically.
 
 ## Desired result
 
