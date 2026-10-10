@@ -10,17 +10,20 @@ events before Codex handles them.
 
 ## Decision
 
-Add a `gh-watch` portable plugin at `plugins/gh-watch`. Its root `plugin.json`,
-`mcp.json`, and `skills/gh-watch/SKILL.md` follow the Agent Plugins layout. A
-repo marketplace at `.agents/plugins/marketplace.json` exposes the plugin. The
-package does not need a compatibility manifest, hooks, an app, or a UI.
+Add a `gh-watch` Codex plugin at `plugins/gh-watch`. Its
+`.codex-plugin/plugin.json`, `.mcp.json`, and `skills/gh-watch/SKILL.md` use the
+Codex compatibility layout. A repo marketplace at
+`.agents/plugins/marketplace.json` exposes the plugin. The package does not
+need hooks, an app, or a UI.
 
 The plugin starts one bundled Node.js stdio MCP server. Esbuild produces one
 ESM file that includes the local client, the maintained official MCP TypeScript
 SDK, and all other runtime dependencies. Only Node.js built-ins stay external.
-The MCP manifest runs `node ./dist/server.mjs` with `cwd` set to
-`${PLUGIN_ROOT}`. Thus, the installed plugin has no path to the checkout or a
-workspace package. The server exposes only these tools:
+The MCP manifest runs `node ./dist/server.mjs` from the plugin root and passes
+the four named configuration variables from the Codex environment. The
+portable MCP format cannot pass named host environment variables in Codex
+0.162.1. Thus, the installed plugin has no path to the checkout or a workspace
+package. The server exposes only these tools:
 
 ```ts
 watch(input: Readonly<{
