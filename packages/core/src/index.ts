@@ -4,7 +4,6 @@ export {
   type AccessJwtPayload,
   type AccessKeySet,
   type AcknowledgeToolInput,
-  type Acknowledgement,
   type ConsumerState,
   type Cursor,
   type ErrorCode,
@@ -22,13 +21,11 @@ export {
   type LocalConfig,
   type NonEmptyString,
   type PublicError,
-  type PendingBatch,
   type RawEventQuery,
-  type StreamMessage,
   type StreamAttachmentData,
+  type StreamMessage,
   type Subscribe,
   type WatchToolInput,
-  type WatchResult,
   type WaitMilliseconds,
 } from "./parser.ts";
 
@@ -50,6 +47,8 @@ export type StoredDelivery = Readonly<{
   payload: ArrayBuffer;
 }>;
 
+export type Acknowledgement = Readonly<{ value: string }>;
+
 export type WatchRequest = Readonly<{
   consumer: string;
   filters: EventFilters;
@@ -57,6 +56,13 @@ export type WatchRequest = Readonly<{
   signal?: AbortSignal;
 }>;
 
+export type WatchResult =
+  | Readonly<{
+      type: "batch";
+      events: ReadonlyArray<Event>;
+      acknowledgement: Acknowledgement;
+    }>
+  | Readonly<{ type: "timeout" }>;
 
 export const DEFAULT_EVENT_LIMIT = 100;
 export const MAX_EVENT_LIMIT = 1_000;
