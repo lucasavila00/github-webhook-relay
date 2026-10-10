@@ -30,6 +30,7 @@ import {
   validateCursor,
   type EventStoreCapability,
 } from "../src/ingestion.ts";
+import { joinRepositoryFilter } from "../src/stream.ts";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -404,6 +405,18 @@ describe.sequential("authenticated event history", () => {
     });
   });
 
+  it("orders positions numerically after the log reaches two digits", async () => {
+    await insertEventFixtures(13);
+    const access = await createAccessSession();
+    const response = await readHistory(access, "?limit=13");
+    const page = await response.json() as {
+      events: ReadonlyArray<{ id: string }>;
+    };
+    expect(page.events.map(({ id }) => id)).toEqual(
+      Array.from({ length: 13 }, (_, index) => `event_${index + 1}`),
+    );
+  });
+
   it.each([
     ["?limit=0", "invalid_request"],
     ["?limit=1001", "invalid_request"],
@@ -449,6 +462,245 @@ describe.sequential("authenticated event history", () => {
       },
     });
   });
+});
+
+describe.sequential("authenticated event stream", () => {
+  afterEach(async () => {
+    await reset();
+  });
+
+  it("requires authentication before the WebSocket upgrade", async () => {
+    const response = await SELF.fetch("https://relay.test/api/events/stream", {
+      headers: { Upgrade: "websocket" },
+    });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      error: { code: "unauthorized" },
+    });
+  });
+
+  it("replays filtered history and continues live without a gap", async () => {
+    await send(
+      "issue_comment",
+      "stream-excluded",
+      payload({ action: "created", comment: { id: 1 }, issue: { number: 1 } }),
+    );
+    await send("issues", "stream-replay", payload({ action: "opened" }));
+    const socket = await openStream(await createAccessSession());
+    const replay = nextMessages(socket, 3);
+    socket.send(JSON.stringify({ type: "subscribe", filters: { type: "issues" } }));
+    expect(await replay).toMatchObject([
+      { type: "checkpoint", cursor: "cursor_1" },
+      { type: "event", event: { id: "event_2", deliveryId: "stream-replay" } },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+
+    const live = nextMessages(socket, 2);
+    await send("issues", "stream-live", payload({ action: "opened" }));
+    expect(await live).toMatchObject([
+      { type: "event", event: { id: "event_3", deliveryId: "stream-live" } },
+      { type: "checkpoint", cursor: "cursor_3" },
+    ]);
+
+    const reconnect = await openStream(await createAccessSession());
+    const repeated = nextMessages(reconnect, 2);
+    reconnect.send(JSON.stringify({ type: "subscribe", after: "cursor_2" }));
+    expect(await repeated).toMatchObject([
+      { type: "event", event: { id: "event_3", deliveryId: "stream-live" } },
+      { type: "checkpoint", cursor: "cursor_3" },
+    ]);
+    socket.close(1000, "Done.");
+    reconnect.close(1000, "Done.");
+  });
+
+  it("does not lose an event that arrives while replay starts", async () => {
+    await insertEventFixtures(100);
+    const socket = await openStream(await createAccessSession());
+    const messages = nextMessages(socket, 101);
+    socket.send(JSON.stringify({
+      type: "subscribe",
+      filters: { repository: "no-match" },
+    }));
+    const delivery = send("issues", "replay-race", payload({ action: "opened" }));
+    expect((await delivery).status).toBe(202);
+    expect(await messages).toEqual(
+      Array.from({ length: 101 }, (_, index) => ({
+        type: "checkpoint",
+        cursor: `cursor_${index + 1}`,
+      })),
+    );
+    socket.close(1000, "Done.");
+  });
+
+  it("keeps simultaneous subscription filters and cursors independent", async () => {
+    const access = await createAccessSession();
+    const issues = await openStream(access);
+    const comments = await openStream(access);
+    issues.send(JSON.stringify({ type: "subscribe", filters: { type: "issues" } }));
+    comments.send(JSON.stringify({
+      type: "subscribe",
+      filters: { type: "issue_comment" },
+    }));
+
+    const issueMessages = nextMessages(issues, 3);
+    const commentMessages = nextMessages(comments, 3);
+    await send("issues", "independent-issue", payload({ action: "opened" }));
+    await send(
+      "issue_comment",
+      "independent-comment",
+      payload({ action: "created", comment: { id: 2 }, issue: { number: 1 } }),
+    );
+    expect(await issueMessages).toMatchObject([
+      { type: "event", event: { deliveryId: "independent-issue" } },
+      { type: "checkpoint", cursor: "cursor_1" },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+    expect(await commentMessages).toMatchObject([
+      { type: "checkpoint", cursor: "cursor_1" },
+      { type: "event", event: { deliveryId: "independent-comment" } },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+    issues.close(1000, "Done.");
+    comments.close(1000, "Done.");
+    await waitForSubscriptionCount(0);
+  });
+
+  it.each([
+    [JSON.stringify({ type: "other" }), "invalid_request"],
+    [JSON.stringify({ type: "subscribe", after: "cursor_9" }), "invalid_cursor"],
+  ])("sends a public error and closes invalid subscription input", async (input, code) => {
+    const socket = await openStream(await createAccessSession());
+    const message = nextMessages(socket, 1);
+    const closed = nextClose(socket);
+    socket.send(input);
+    expect(await message).toMatchObject([{ type: "error", error: { code } }]);
+    expect(await closed).toMatchObject({ code: 1008 });
+  });
+
+  it("closes a socket that does not subscribe in ten seconds", async () => {
+    const socket = await openStream(await createAccessSession());
+    const message = nextMessages(socket, 1, 12_000);
+    const closed = nextClose(socket, 12_000);
+    expect(await message).toEqual([{
+      type: "error",
+      error: { code: "invalid_request", message: "Subscription required." },
+    }]);
+    expect(await closed).toMatchObject({ code: 1008 });
+  }, 15_000);
+
+  it("stores and reconstructs every repository filter code unit", async () => {
+    const repository = `${"a".repeat(15_999)}😀${"b".repeat(16_000)}\ud800`;
+    const socket = await openStream(await createAccessSession());
+    socket.send(JSON.stringify({ type: "subscribe", filters: { repository } }));
+    const checkpoint = nextMessages(socket, 1);
+    await send("issues", "chunk-progress", payload({ action: "opened" }));
+    expect(await checkpoint).toEqual([
+      { type: "checkpoint", cursor: "cursor_1" },
+    ]);
+    const chunks = await subscriptionChunks();
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(joinRepositoryFilter(chunks)).toBe(repository);
+    socket.close(1000, "Done.");
+  });
+
+  it("continues live delivery after hibernation eviction", async () => {
+    const socket = await openStream(await createAccessSession());
+    socket.send(JSON.stringify({ type: "subscribe" }));
+    const beforeEviction = nextMessages(socket, 2);
+    await send("issues", "before-eviction", payload({ action: "opened" }));
+    expect(await beforeEviction).toMatchObject([
+      { type: "event", event: { id: "event_1" } },
+      { type: "checkpoint", cursor: "cursor_1" },
+    ]);
+
+    await evictDurableObject(eventRelayStub());
+    const afterEviction = nextMessages(socket, 2);
+    await send("issues", "after-eviction", payload({ action: "opened" }));
+    expect(await afterEviction).toMatchObject([
+      { type: "event", event: { id: "event_2" } },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+    socket.close(1000, "Done.");
+  });
+
+  it("streams retained rows larger than the Durable Object memory limit", async () => {
+    await insertLargeEventFixtures(65, 2 * 1024 * 1024);
+    const socket = await openStream(await createAccessSession());
+    const checkpoints = nextMessages(socket, 65, 20_000);
+    socket.send(JSON.stringify({
+      type: "subscribe",
+      filters: { repository: "no-match" },
+    }));
+    const received = await checkpoints;
+    expect(received[64]).toEqual({
+      type: "checkpoint",
+      cursor: "cursor_65",
+    });
+    socket.close(1000, "Done.");
+  }, 30_000);
+
+  it("closes before a large event that would exceed the byte budget", async () => {
+    await insertLargeEventFixtures(2, 5 * 1024 * 1024);
+    const socket = await openStream(await createAccessSession());
+    const first = nextMessages(socket, 2, 15_000);
+    const closed = nextClose(socket, 15_000);
+    socket.send(JSON.stringify({ type: "subscribe" }));
+    expect(await first).toMatchObject([
+      { type: "event", event: { id: "event_1" } },
+      { type: "checkpoint", cursor: "cursor_1" },
+    ]);
+    expect(await closed).toMatchObject({ code: 1013 });
+
+    const reconnect = await openStream(await createAccessSession());
+    const replay = nextMessages(reconnect, 2, 15_000);
+    reconnect.send(JSON.stringify({ type: "subscribe", after: "cursor_1" }));
+    expect(await replay).toMatchObject([
+      { type: "event", event: { id: "event_2" } },
+      { type: "checkpoint", cursor: "cursor_2" },
+    ]);
+  }, 30_000);
+
+  it("delivers one retained event larger than the byte budget", async () => {
+    await insertLargeEventFixtures(1, 8 * 1024 * 1024 - 128, "r");
+    const socket = await openStream(await createAccessSession());
+    const messages = nextMessages(socket, 2, 20_000);
+    const closed = nextClose(socket, 20_000);
+    socket.send(JSON.stringify({ type: "subscribe" }));
+    expect(await messages).toMatchObject([
+      { type: "event", event: { id: "event_1" } },
+      { type: "checkpoint", cursor: "cursor_1" },
+    ]);
+    expect(await closed).toMatchObject({ code: 1013 });
+  }, 30_000);
+
+  it("closes at the position budget and replays the next position", async () => {
+    await insertEventFixtures(1_001);
+    const socket = await openStream(await createAccessSession());
+    const messages = nextMessages(socket, 1_000, 15_000);
+    const closed = nextClose(socket, 15_000);
+    socket.send(JSON.stringify({
+      type: "subscribe",
+      filters: { repository: "no-match" },
+    }));
+    const received = await messages;
+    expect(received[999]).toEqual({
+      type: "checkpoint",
+      cursor: "cursor_1000",
+    });
+    expect(await closed).toMatchObject({ code: 1013 });
+
+    const reconnect = await openStream(await createAccessSession());
+    const resumed = nextMessages(reconnect, 1);
+    reconnect.send(JSON.stringify({
+      type: "subscribe",
+      after: "cursor_1000",
+      filters: { repository: "no-match" },
+    }));
+    expect(await resumed).toEqual([
+      { type: "checkpoint", cursor: "cursor_1001" },
+    ]);
+    reconnect.close(1000, "Done.");
+  }, 20_000);
 });
 
 describe.sequential("authenticated browser assets", () => {
@@ -665,5 +917,144 @@ function readHistory(access: AccessSession, query: string): Promise<Response> {
     new Request(`https://relay.test/api/events${query}`, {
       headers: { "Cf-Access-Jwt-Assertion": access.token },
     }),
+  );
+}
+
+async function openStream(access: AccessSession): Promise<WebSocket> {
+  const response = await handleRelayRequest(
+    accessCapabilities,
+    {
+      accessAudience: env.ACCESS_AUD,
+      accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
+      relayHostname: env.RELAY_HOSTNAME,
+    },
+    env.EVENT_RELAY,
+    new Request("https://relay.test/api/events/stream", {
+      headers: {
+        "Cf-Access-Jwt-Assertion": access.token,
+        Upgrade: "websocket",
+      },
+    }),
+  );
+  if (response.status !== 101 || response.webSocket === null) {
+    throw new Error(`WebSocket upgrade failed with status ${response.status}.`);
+  }
+  response.webSocket.accept();
+  return response.webSocket;
+}
+
+function nextMessages(
+  socket: WebSocket,
+  count: number,
+  timeout = 5_000,
+): Promise<ReadonlyArray<unknown>> {
+  return new Promise((resolve, reject) => {
+    let messages: ReadonlyArray<unknown> = [];
+    const timer = setTimeout(() => {
+      socket.removeEventListener("message", receive);
+      reject(new Error(`Received ${messages.length} of ${count} messages.`));
+    }, timeout);
+    const receive = (event: MessageEvent): void => {
+      if (typeof event.data !== "string") {
+        clearTimeout(timer);
+        reject(new Error("The stream message was not text."));
+        return;
+      }
+      messages = [...messages, JSON.parse(event.data) as unknown];
+      if (messages.length === count) {
+        clearTimeout(timer);
+        socket.removeEventListener("message", receive);
+        resolve(messages);
+      }
+    };
+    socket.addEventListener("message", receive);
+  });
+}
+
+function nextClose(socket: WebSocket, timeout = 5_000): Promise<CloseEvent> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("The stream did not close.")),
+      timeout,
+    );
+    socket.addEventListener("close", (event) => {
+      clearTimeout(timer);
+      resolve(event);
+    }, { once: true });
+  });
+}
+
+async function subscriptionCount(): Promise<number> {
+  return runInDurableObject<EventRelay, number>(
+    eventRelayStub(),
+    (_instance, state) => state.storage.sql.exec<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM subscriptions",
+    ).one().count,
+  );
+}
+
+async function waitForSubscriptionCount(expected: number): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (await subscriptionCount() === expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Subscription count did not become ${expected}.`);
+}
+
+async function subscriptionChunks(): Promise<ReadonlyArray<string>> {
+  return runInDurableObject<EventRelay, ReadonlyArray<string>>(
+    eventRelayStub(),
+    (_instance, state) => state.storage.sql.exec<{ value: string }>(
+      `SELECT value FROM subscription_repository_chunks
+       ORDER BY sequence`,
+    ).toArray().map(({ value }) => value),
+  );
+}
+
+async function insertEventFixtures(count: number): Promise<void> {
+  await runInDurableObject<EventRelay, void>(
+    eventRelayStub(),
+    (_instance, state) => {
+      state.storage.transactionSync(() => {
+        for (let position = 1; position <= count; position += 1) {
+          state.storage.sql.exec(
+            `INSERT INTO events (
+              delivery_id, event_type, repository, received_at, payload
+            ) VALUES (?, ?, ?, ?, ?)`,
+            `fixture-${position}`,
+            "issues",
+            "owner/repository",
+            "2026-10-10T13:00:00Z",
+            encoder.encode(payload({ action: "opened" })).buffer,
+          );
+        }
+      });
+    },
+  );
+}
+
+async function insertLargeEventFixtures(
+  count: number,
+  payloadBytes: number,
+  repository = "owner/repository",
+): Promise<void> {
+  const padding = "x".repeat(payloadBytes - 14);
+  const body = encoder.encode(JSON.stringify({ padding })).buffer;
+  await runInDurableObject<EventRelay, void>(
+    eventRelayStub(),
+    (_instance, state) => {
+      for (let position = 1; position <= count; position += 1) {
+        state.storage.sql.exec(
+          `INSERT INTO events (
+            delivery_id, event_type, repository, received_at, payload
+          ) VALUES (?, ?, ?, ?, ?)`,
+          `large-fixture-${position}`,
+          "issues",
+          repository,
+          "2026-10-10T13:00:00Z",
+          body,
+        );
+      }
+    },
   );
 }

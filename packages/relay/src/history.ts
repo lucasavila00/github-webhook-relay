@@ -97,7 +97,7 @@ export function getEventHistory(
   }
 }
 
-type StoredEventRow = Readonly<{
+export type StoredEventRow = Readonly<{
   deliveryId: string;
   eventType: EventType;
   payload: ArrayBuffer;
@@ -213,7 +213,7 @@ function lastPositionBefore(
   ).one().position ?? undefined;
 }
 
-function toEvent(row: StoredEventRow): Event {
+export function toEvent(row: StoredEventRow): Event {
   const payload: unknown = JSON.parse(new TextDecoder().decode(row.payload));
   return Parsers.Event.parse({
     id: eventId(row.position),

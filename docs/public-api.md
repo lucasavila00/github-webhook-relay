@@ -127,6 +127,19 @@ A client saves a checkpoint after it processes all earlier event messages.
 Each client stores its own cursor. A reconnect can repeat events, so clients
 use event IDs to remove duplicates.
 
+The client must send its one subscription within 10 seconds. Invalid messages
+and cursors send a public error before close code 1008. Unexpected stream
+failures use close code 1011. A connection scans at most 1,000 positions or
+sends 8 MiB of serialized messages. At that boundary, the server sends the
+last safe checkpoint and closes with code 1013. The client reconnects with its
+saved checkpoint. One retained event larger than 8 MiB remains deliverable.
+
+The relay stores each connection's filters in SQLite for WebSocket
+hibernation. Repository filters use ordered chunks of at most 16,000 UTF-16
+code units, so every valid subscription string can be restored exactly.
+Closing a connection removes only its subscription metadata. It does not
+remove events or affect another consumer.
+
 ## Errors
 
 A public error has a message and one of these codes:
