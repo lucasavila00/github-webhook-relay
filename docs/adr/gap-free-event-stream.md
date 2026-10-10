@@ -13,14 +13,16 @@ signal, so one slow consumer must not create an unbounded send queue.
 `GET /api/events/stream` upgrades through the authenticated relay route. The
 client must send the shared `subscribe` message in 10 seconds and must not send
 another message. Beff validates the message before the relay uses its values.
-An invalid message or cursor produces the agreed public error message, followed
-by close code `1008`. An unexpected failure sends `internal_error` when
-possible, followed by close code `1011`.
+At timeout, the relay sends `invalid_request` with `Subscription required.` and
+closes with code `1008`. Invalid messages or cursors send the applicable public
+error and the same close code. An unexpected failure sends `internal_error`
+when possible, followed by close code `1011`.
 
 The one SQLite Durable Object owns all ingestion and subscriptions. Its
-WebSocket handler validates the cursor and synchronously scans rows after it.
-No `await` occurs between the scan and registration for live delivery. An
-ingestion turn synchronously commits a new row and sends it to registered
+WebSocket handler validates the cursor. One `transactionSync` call stores the
+filters under a small connection key and reads the replay rows. The handler
+then sends the replay and registers live delivery without an `await`.
+An ingestion turn synchronously commits a new row and sends it to registered
 subscriptions. Durable Object turns cannot interleave across this boundary, so
 an event is in either the replay scan or a later live send.
 
@@ -36,11 +38,16 @@ a checkpoint before a matching event at that position. Event IDs and cursors
 come from the stored SQLite position, so a reconnect repeats the same IDs.
 
 The relay uses the Durable Object WebSocket Hibernation API. A socket attachment
-contains only its subscription filters, last sent cursor, and delivery-budget
-use. The adapter updates the attachment after it sends the checkpoint. If a
-turn fails between the send and the update, reconnect can repeat an event but
-cannot skip it. The object reconstructs no shared mutable application session
-state after hibernation.
+contains only its small connection key, last sent cursor, and delivery-budget
+use. SQLite stores the filters because the public repository string can exceed
+the attachment size limit. After hibernation, the adapter reads the filters by
+the connection key. It deletes that connection row on socket close or error.
+This lifecycle data has no effect on the retained event log.
+
+The adapter updates the attachment after it sends the checkpoint. If a turn
+fails between the send and the update, reconnect can repeat an event but cannot
+skip it. The object reconstructs no shared mutable application session state
+after hibernation.
 
 Each connection can scan at most 1,000 positions or send 8 MiB of serialized
 messages. At a budget boundary, the relay finishes the current event and its
