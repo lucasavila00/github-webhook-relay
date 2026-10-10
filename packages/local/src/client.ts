@@ -249,7 +249,7 @@ async function loadState(
   }
   if (
     state.consumer !== request.consumer ||
-    JSON.stringify(state.filters) !== JSON.stringify(request.filters)
+    !sameFilters(state.filters, request.filters)
   ) {
     throw localError("storage", "Consumer state does not match its key.");
   }
@@ -320,8 +320,17 @@ function validState(state: ConsumerState): boolean {
   if (state.pending == null) return true;
   return (
     state.pending.token === `ack_${state.generation}` &&
-    state.pending.base === state.acknowledged
+    sameNullishValue(state.pending.base, state.acknowledged)
   );
+}
+
+function sameFilters(left: EventFilters, right: EventFilters): boolean {
+  return sameNullishValue(left.repository, right.repository) &&
+    sameNullishValue(left.type, right.type);
+}
+
+function sameNullishValue<T>(left: T | null | undefined, right: T | null | undefined): boolean {
+  return left == null ? right == null : left === right;
 }
 
 function streamUrl(relayUrl: string): string {

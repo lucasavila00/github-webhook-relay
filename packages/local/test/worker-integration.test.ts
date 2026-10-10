@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { once } from "node:events";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer, request as httpRequest, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,9 +31,9 @@ describe.sequential("local client with the relay Worker", () => {
 
     const batch = await watchEvents(fixture.capabilities, {
       consumer: "long-wait",
-      filters: { repository: "owner/long-wait", type: "issues" },
+      filters: { repository: undefined, type: undefined },
       waitMilliseconds: 2_147_483_648,
-    signal: undefined,
+      signal: undefined,
     });
 
     expect(batch).toMatchObject({
@@ -44,15 +44,20 @@ describe.sequential("local client with the relay Worker", () => {
     const pending = await readState(fixture.stateDirectory);
     expect(pending).not.toHaveProperty("acknowledged");
     expect(pending).toMatchObject({ pending: { checkpoint: "cursor_1" } });
+    await writeState(fixture.stateDirectory, {
+      ...pending,
+      filters: { repository: null, type: null },
+      pending: { ...(pending.pending as Record<string, unknown>), base: null },
+    });
     await acknowledgeEvents(fixture.capabilities, batch.acknowledgement);
     const acknowledged = await readState(fixture.stateDirectory);
     expect(acknowledged).toMatchObject({ acknowledged: "cursor_1" });
     expect(acknowledged).not.toHaveProperty("pending");
     await expect(watchEvents(fixture.capabilities, {
       consumer: "long-wait",
-      filters: { repository: "owner/long-wait", type: "issues" },
+      filters: { repository: undefined, type: undefined },
       waitMilliseconds: 100,
-    signal: undefined,
+      signal: undefined,
     })).resolves.toEqual({ type: "timeout" });
   }, 30_000);
 
@@ -506,4 +511,13 @@ async function readState(directory: string): Promise<Record<string, unknown>> {
     string,
     unknown
   >;
+}
+
+async function writeState(
+  directory: string,
+  state: Record<string, unknown>,
+): Promise<void> {
+  const file = (await readdir(directory)).find((name) => name.endsWith(".json"));
+  if (file == null) throw new Error("State file was not written.");
+  await writeFile(join(directory, file), `${JSON.stringify(state)}\n`);
 }

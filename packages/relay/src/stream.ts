@@ -449,7 +449,7 @@ function writeSubscription(
     `INSERT INTO subscriptions (connection_key, event_type, has_repository)
      VALUES (?, ?, ?)`,
     connectionKey,
-    // oxlint-disable-next-line local/no-nullish-coalesce-noop -- D1 bindings do not accept undefined.
+    // oxlint-disable-next-line local/no-nullish-coalesce-noop -- Durable Object SQL bindings do not accept undefined.
     filters.type ?? null,
     hasRepository,
   );
@@ -485,12 +485,10 @@ function readFilters(
     connectionKey,
   ).toArray().map(({ value }) => value);
   return Parsers.EventFilters.parse({
-    ...(metadata.eventType == null
-      ? {}
-      : { type: metadata.eventType }),
-    ...(metadata.hasRepository === 0
-      ? {}
-      : { repository: joinRepositoryFilter(chunks) }),
+    type: metadata.eventType,
+    repository: metadata.hasRepository === 0
+      ? undefined
+      : joinRepositoryFilter(chunks),
   });
 }
 

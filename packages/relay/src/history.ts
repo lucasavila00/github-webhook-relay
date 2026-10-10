@@ -62,10 +62,10 @@ export function parseEventHistoryQuery(url: URL): QueryResult {
   const raw = rawResult.data;
   const limit = raw.limit == null ? undefined : Number(raw.limit);
   const result = Parsers.EventQuery.safeParse({
-    ...(raw.after == null ? {} : { after: raw.after }),
-    ...(raw.repository == null ? {} : { repository: raw.repository }),
-    ...(raw.type == null ? {} : { type: raw.type }),
-    ...(limit == null ? {} : { limit }),
+    after: raw.after,
+    repository: raw.repository,
+    type: raw.type,
+    limit,
   });
   if (!result.success) return { kind: "invalid_request" };
 
@@ -196,7 +196,7 @@ function selectRows(
 }
 
 function lastPosition(storage: DurableObjectStorage): string | null | undefined {
-  // oxlint-disable-next-line local/no-incomplete-nullish-types -- D1 SQL result values cannot be undefined.
+  // oxlint-disable-next-line local/no-incomplete-nullish-types -- Durable Object SQL values cannot be undefined.
   return storage.sql.exec<{ position: string | null }>(
     "SELECT CAST(MAX(position) AS TEXT) AS position FROM events",
   ).one().position;
@@ -206,7 +206,7 @@ function lastPositionBefore(
   storage: DurableObjectStorage,
   before: string,
 ): string | null | undefined {
-  // oxlint-disable-next-line local/no-incomplete-nullish-types -- D1 SQL result values cannot be undefined.
+  // oxlint-disable-next-line local/no-incomplete-nullish-types -- Durable Object SQL values cannot be undefined.
   return storage.sql.exec<{ position: string | null }>(
     `SELECT CAST(MAX(position) AS TEXT) AS position
      FROM events
