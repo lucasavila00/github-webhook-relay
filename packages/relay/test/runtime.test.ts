@@ -11,6 +11,7 @@ import {
   type ErrorCode,
 } from "@github-webhook-relay/core";
 import { afterEach, describe, expect, it } from "vitest";
+import type { AssetCapability } from "@github-webhook-relay/webapp/server";
 
 import {
   createEventStore,
@@ -49,6 +50,7 @@ const accessCapabilities = Capabilities.create<
   | CryptoCapability
   | AccessKeyStoreCapability
   | HttpCapability
+  | AssetCapability
 >({
   clock: { now: Date.now },
   crypto: {
@@ -68,6 +70,7 @@ const accessCapabilities = Capabilities.create<
       ),
   },
   http: { fetch: globalThis.fetch.bind(globalThis) },
+  assets: { fetch: env.ASSETS.fetch.bind(env.ASSETS) },
 });
 
 describe.sequential("GitHub webhook ingestion", () => {
@@ -350,6 +353,49 @@ describe.sequential("authenticated event history", () => {
     expect(await second.json()).toMatchObject({
       events: [{ id: "event_4", deliveryId: "matching-2" }],
       cursor: "cursor_4",
+      hasMore: false,
+    });
+  });
+
+  it("orders positions numerically across filtered lookahead pages", async () => {
+    for (let position = 1; position <= 8; position += 1) {
+      await send(
+        "issues",
+        `numeric-excluded-${position}`,
+        payload({ action: "opened" }, "other/repository"),
+      );
+    }
+    await send("issues", "numeric-match-9", payload({ action: "opened" }));
+    await send(
+      "issue_comment",
+      "numeric-excluded-10",
+      payload({ action: "created", comment: { id: 10 }, issue: { number: 1 } }),
+    );
+    await send("issues", "numeric-match-11", payload({ action: "opened" }));
+    await send(
+      "issues",
+      "numeric-excluded-12",
+      payload({ action: "opened" }, "other/repository"),
+    );
+    const access = await createAccessSession();
+
+    const first = await readHistory(
+      access,
+      "?repository=owner%2Frepository&type=issues&limit=1",
+    );
+    expect(await first.json()).toMatchObject({
+      events: [{ id: "event_9", deliveryId: "numeric-match-9" }],
+      cursor: "cursor_10",
+      hasMore: true,
+    });
+
+    const second = await readHistory(
+      access,
+      "?after=cursor_10&repository=owner%2Frepository&type=issues&limit=1",
+    );
+    expect(await second.json()).toMatchObject({
+      events: [{ id: "event_11", deliveryId: "numeric-match-11" }],
+      cursor: "cursor_12",
       hasMore: false,
     });
   });
@@ -807,6 +853,56 @@ describe.sequential("authenticated event stream", () => {
   }, 20_000);
 });
 
+describe.sequential("authenticated browser assets", () => {
+  afterEach(async () => {
+    await reset();
+  });
+
+  it("protects and serves the built browser from the relay Worker", async () => {
+    const rejected = await SELF.fetch("https://relay.test/");
+    await expectError(rejected, 401, "unauthorized");
+
+    const access = await createAccessSession();
+    const response = await handleRelayRequest(
+      accessCapabilities,
+      {
+        accessAudience: env.ACCESS_AUD,
+        accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
+        relayHostname: env.RELAY_HOSTNAME,
+      },
+      env.EVENT_RELAY,
+      new Request("https://relay.test/", {
+        headers: { "Cf-Access-Jwt-Assertion": access.token },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(await response.text()).toContain("<title>GitHub event history</title>");
+  });
+
+  it("accepts the Access browser cookie and gives the header precedence", async () => {
+    const access = await createAccessSession();
+    const request = (headers: HeadersInit) => handleRelayRequest(
+      accessCapabilities,
+      {
+        accessAudience: env.ACCESS_AUD,
+        accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
+        relayHostname: env.RELAY_HOSTNAME,
+      },
+      env.EVENT_RELAY,
+      new Request("https://relay.test/", { headers }),
+    );
+    expect((await request({
+      Cookie: `other=value; CF_Authorization=${access.token}`,
+    })).status).toBe(200);
+    expect((await request({ Cookie: "CF_Authorization=invalid" })).status).toBe(401);
+    expect((await request({
+      "Cf-Access-Jwt-Assertion": "invalid",
+      Cookie: `CF_Authorization=${access.token}`,
+    })).status).toBe(401);
+  });
+});
+
 type StoredRow = Readonly<{
   position: string;
   delivery_id: string;
@@ -829,7 +925,7 @@ async function readRows(): Promise<ReadonlyArray<StoredRow>> {
       `SELECT CAST(position AS TEXT) AS position,
               delivery_id, event_type, payload
        FROM events
-       ORDER BY position`,
+       ORDER BY events.position`,
     ).toArray(),
   );
 }

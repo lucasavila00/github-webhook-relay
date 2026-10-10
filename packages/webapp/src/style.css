@@ -1,0 +1,12 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+body { margin: 0; }
+main { margin: 0 auto; max-width: 72rem; padding: 1.5rem; }
+form { align-items: end; display: flex; flex-wrap: wrap; gap: 1rem; }
+label { display: grid; gap: 0.35rem; }
+input, select, button { font: inherit; padding: 0.55rem; }
+ol { display: grid; gap: 0.5rem; padding: 0; }
+li { display: block; }
+li button { text-align: left; width: 100%; }
+nav { display: flex; gap: 0.5rem; }
+aside { margin-top: 1rem; }
+pre { background: CanvasText; color: Canvas; overflow: auto; padding: 1rem; }
