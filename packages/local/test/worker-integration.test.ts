@@ -261,9 +261,10 @@ async function closeServer(server: Server): Promise<void> {
 }
 
 async function stopChild(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null) return;
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const closed = once(child, "close");
   child.kill("SIGTERM");
-  await once(child, "close");
+  await closed;
 }
 
 async function temporaryDirectory(prefix: string): Promise<string> {

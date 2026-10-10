@@ -128,6 +128,7 @@ async function waitForOpen(socket: WebSocket, signal: AbortSignal): Promise<void
     };
     const onError = (): void => {
       cleanup();
+      socket.once("error", () => undefined);
       reject(localError("connection", "Cannot connect to the relay."));
     };
     const onAbort = (): void => {
@@ -140,6 +141,7 @@ async function waitForOpen(socket: WebSocket, signal: AbortSignal): Promise<void
       const code = response.statusCode;
       response.resume();
       cleanup();
+      socket.once("error", () => undefined);
       socket.terminate();
       reject(
         code === 401

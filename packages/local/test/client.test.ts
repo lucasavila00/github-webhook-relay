@@ -210,6 +210,20 @@ describe("local event client", () => {
       acknowledgeEvents(fixture.capabilities, unseen),
     ).rejects.toMatchObject({ code: "stale_acknowledgement" });
   });
+
+  it("reports an authentication rejection without credentials", async () => {
+    const url = await startRejectedRelay(401);
+    const fixture = await clientFixture(url);
+
+    const error = await watchEvents(fixture.capabilities, {
+      consumer: "authentication",
+      filters: {},
+      waitMilliseconds: 2_000,
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({ code: "unauthorized" });
+    expect(String((error as Error).message)).not.toContain("client-secret");
+  });
 });
 
 const event = Parsers.Event.parse({
@@ -283,4 +297,22 @@ async function closeServer(server: Server): Promise<void> {
   if (!server.listening) return;
   server.close();
   await once(server, "close");
+}
+
+async function startRejectedRelay(status: number): Promise<string> {
+  const server = createServer();
+  server.on("upgrade", (_request, socket) => {
+    socket.end(`HTTP/1.1 ${status} Rejected\r\nConnection: close\r\n\r\n`);
+  });
+  const port = await new Promise<number>((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        throw new Error("Test server did not bind to TCP.");
+      }
+      resolve(address.port);
+    });
+  });
+  cleanups.push(async () => closeServer(server));
+  return `http://127.0.0.1:${port}`;
 }
