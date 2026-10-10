@@ -1,4 +1,4 @@
-import type { Capabilities, Capability } from "@beff/diy";
+import type { Capabilities, Capability } from "@beff/diy/capabilities";
 import { Parsers, type AccessKeySet } from "@github-webhook-relay/core";
 
 type HttpClient = Readonly<{ fetch: typeof fetch }>;
@@ -14,7 +14,10 @@ type CryptoService = Readonly<{
 
 export type HttpCapability = Capability<"http", HttpClient>;
 export type ClockCapability = Capability<"clock", Clock>;
-export type AccessKeyStoreCapability = Capability<"accessKeyStore", AccessKeyStore>;
+export type AccessKeyStoreCapability = Capability<
+  "accessKeyStore",
+  AccessKeyStore
+>;
 export type CryptoCapability = Capability<"crypto", CryptoService>;
 
 export type AccessConfiguration = Readonly<{
@@ -43,7 +46,9 @@ type ParsedToken = Readonly<{
   signature: Uint8Array<ArrayBuffer>;
 }>;
 
-const decodeBase64Url = (value: string): Uint8Array<ArrayBuffer> | undefined => {
+const decodeBase64Url = (
+  value: string,
+): Uint8Array<ArrayBuffer> | undefined => {
   try {
     const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
     const decoded = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
@@ -73,36 +78,42 @@ const parseToken = (token: string): ParsedToken | undefined => {
   const encodedHeader = parts[0];
   const encodedPayload = parts[1];
   const encodedSignature = parts[2];
-  if (encodedHeader === undefined || encodedPayload === undefined || encodedSignature === undefined) {
-    return undefined;
-  }
+  if (
+    encodedHeader === undefined ||
+    encodedPayload === undefined ||
+    encodedSignature === undefined
+  ) return undefined;
 
   const headerResult = Parsers.AccessJwtHeader.safeParse(decodeJson(encodedHeader));
-  const payloadResult = Parsers.AccessJwtPayload.safeParse(decodeJson(encodedPayload));
+  const payloadResult = Parsers.AccessJwtPayload.safeParse(
+    decodeJson(encodedPayload),
+  );
   const signature = decodeBase64Url(encodedSignature);
   if (!headerResult.success || !payloadResult.success || signature === undefined) {
     return undefined;
   }
-  const header = headerResult.data;
   const payload = payloadResult.data;
-
   return {
     encodedHeader,
     encodedPayload,
-    header: { kid: header.kid },
+    header: { kid: headerResult.data.kid },
     payload: {
       aud: payload.aud,
       exp: payload.exp,
       issuer: payload.iss,
       subject: payload.sub,
-      ...(payload.common_name === undefined ? {} : { commonName: payload.common_name }),
+      ...(payload.common_name === undefined
+        ? {}
+        : { commonName: payload.common_name }),
       ...(payload.email === undefined ? {} : { email: payload.email }),
     },
     signature,
   };
 };
 
-const parseAccessKeys = (value: unknown): ReadonlyArray<AccessKey> | undefined => {
+const parseAccessKeys = (
+  value: unknown,
+): ReadonlyArray<AccessKey> | undefined => {
   const result = Parsers.AccessKeySet.safeParse(value);
   return result.success ? result.data.keys : undefined;
 };
@@ -129,8 +140,12 @@ const getPrincipal = (token: ParsedToken): AccessPrincipal | undefined => {
   return undefined;
 };
 
-const includesAudience = (audience: string | ReadonlyArray<string>, expected: string): boolean =>
-  typeof audience === "string" ? audience === expected : audience.includes(expected);
+const includesAudience = (
+  audience: string | ReadonlyArray<string>,
+  expected: string,
+): boolean => typeof audience === "string"
+  ? audience === expected
+  : audience.includes(expected);
 
 export async function verifyAccessToken(
   capabilities: Capabilities<ClockCapability | CryptoCapability>,
@@ -158,8 +173,15 @@ export async function verifyAccessToken(
       false,
       ["verify"],
     );
-    const data = new TextEncoder().encode(`${parsed.encodedHeader}.${parsed.encodedPayload}`);
-    const valid = await capabilities.crypto.verify("RSASSA-PKCS1-v1_5", cryptoKey, parsed.signature, data);
+    const data = new TextEncoder().encode(
+      `${parsed.encodedHeader}.${parsed.encodedPayload}`,
+    );
+    const valid = await capabilities.crypto.verify(
+      "RSASSA-PKCS1-v1_5",
+      cryptoKey,
+      parsed.signature,
+      data,
+    );
     return valid ? getPrincipal(parsed) : undefined;
   } catch {
     return undefined;
@@ -185,12 +207,19 @@ async function getAccessKeys(
 }
 
 export async function authenticateAccessRequest(
-  capabilities: Capabilities<HttpCapability | ClockCapability | AccessKeyStoreCapability | CryptoCapability>,
+  capabilities: Capabilities<
+    | HttpCapability
+    | ClockCapability
+    | AccessKeyStoreCapability
+    | CryptoCapability
+  >,
   configuration: AccessConfiguration,
   request: Request,
 ): Promise<AccessPrincipal | undefined> {
   const token = request.headers.get("Cf-Access-Jwt-Assertion");
   if (token === null) return undefined;
   const keys = await getAccessKeys(capabilities, configuration.teamDomain);
-  return keys === undefined ? undefined : verifyAccessToken(capabilities, configuration, keys, token);
+  return keys === undefined
+    ? undefined
+    : verifyAccessToken(capabilities, configuration, keys, token);
 }

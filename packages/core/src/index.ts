@@ -1,5 +1,8 @@
 export {
   Parsers,
+  type AccessJwtHeader,
+  type AccessJwtPayload,
+  type AccessKeySet,
   type Cursor,
   type ErrorCode,
   type Event,
@@ -15,6 +18,7 @@ export {
   type HttpError,
   type NonEmptyString,
   type PublicError,
+  type RawEventQuery,
   type StreamMessage,
   type Subscribe,
 } from "./parser.ts";
@@ -96,29 +100,3 @@ function matchesFilters(event: Event, filters: EventFilters): boolean {
   );
 }
 
-export type AccessJwtHeader = Readonly<{
-  alg: "RS256";
-  kid: string;
-}>;
-
-export type AccessJwtPayload = Readonly<{
-  aud: string | ReadonlyArray<string>;
-  common_name?: string;
-  email?: string;
-  exp: number;
-  iss: string;
-  sub: string;
-}>;
-
-export type AccessKeySet = Readonly<{
-  keys: ReadonlyArray<
-    Readonly<{
-      alg: "RS256";
-      e: string;
-      kid: string;
-      kty: "RSA";
-      n: string;
-      use: "sig";
-    }>
-  >;
-}>;

@@ -21,7 +21,7 @@ import {
 } from "../src/access.ts";
 import {
   createEventStore,
-  handleRelayRequest,
+  handleRelayRequest as handleRelayRuntimeRequest,
   type EventRelay,
 } from "../src/index.ts";
 import {
@@ -47,7 +47,7 @@ const keyUrl = `${env.ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`;
 const configuration = {
   accessAudience: env.ACCESS_AUD,
   accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-  relayHostname: env.RELAY_HOSTNAME,
+  relayHostname: "relay.example.com",
 } as const;
 
 const capabilities = Capabilities.create<
@@ -74,6 +74,17 @@ const capabilities = Capabilities.create<
   },
   http: { fetch: globalThis.fetch.bind(globalThis) },
 });
+
+const handleRelayRequest = (
+  testCapabilities: typeof capabilities,
+  testConfiguration: typeof configuration,
+  request: Request,
+): Promise<Response> => handleRelayRuntimeRequest(
+  testCapabilities,
+  testConfiguration,
+  env.EVENT_RELAY,
+  request,
+);
 
 const base64Url = (value: ArrayBuffer | Uint8Array<ArrayBuffer>): string => {
   const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
@@ -167,7 +178,7 @@ describe("relay Access boundary", () => {
     const token = await signToken(keys, validClaims());
     expect(await verifyAccessToken(capabilities, { audience: env.ACCESS_AUD, teamDomain: env.ACCESS_TEAM_DOMAIN }, [keys.publicJwk], token)).toEqual({ kind: "identity", subject: "identity-subject", email: "lucaxx@gmail.com" });
     expect(await capabilities.accessKeyStore.read(keyUrl)).toBeDefined();
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(501);
+    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(200);
   });
 
   it("accepts an identity token without an email claim", async () => {
@@ -175,7 +186,7 @@ describe("relay Access boundary", () => {
     await installKey(keys);
     const { email: _, ...claims } = validClaims();
     const token = await signToken(keys, claims);
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(501);
+    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(200);
   });
 
   it("accepts a signed service token without an email or subject", async () => {
@@ -188,7 +199,7 @@ describe("relay Access boundary", () => {
       iss: env.ACCESS_TEAM_DOMAIN,
       sub: "",
     });
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(501);
+    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(200);
   });
 
   it("rejects a token with a wrong audience", async () => {
@@ -250,7 +261,7 @@ describe("relay Access boundary", () => {
     await installKey(keys);
     const token = await signToken(keys, validClaims());
     expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://alternate.example.com/api/events/stream", token, true))).status).toBe(403);
-    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events/stream", token, true))).status).toBe(501);
+    expect((await handleRelayRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events/stream", token, true))).status).toBe(404);
   });
 
   it("routes only the exact webhook POST without Access", async () => {
@@ -260,7 +271,7 @@ describe("relay Access boundary", () => {
         ? { method, body }
         : { method });
 
-    expect((await handleRelayRequest(capabilities, configuration, request("https://relay.example.com/webhooks/github", "POST"))).status).toBe(501);
+    expect((await handleRelayRequest(capabilities, configuration, request("https://relay.example.com/webhooks/github", "POST"))).status).toBe(401);
     expect((await handleRelayRequest(capabilities, configuration, request("https://alternate.example.com/webhooks/github", "POST"))).status).toBe(401);
     expect((await handleRelayRequest(capabilities, configuration, request("https://relay.example.com/webhooks/github", "GET"))).status).toBe(401);
   });
@@ -277,6 +288,32 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const secret = "test-secret";
 const objectName = "github-webhook-relay";
+
+const accessCapabilities = Capabilities.create<
+  | ClockCapability
+  | CryptoCapability
+  | AccessKeyStoreCapability
+  | HttpCapability
+>({
+  clock: { now: Date.now },
+  crypto: {
+    importKey: crypto.subtle.importKey.bind(crypto.subtle),
+    verify: crypto.subtle.verify.bind(crypto.subtle),
+  },
+  accessKeyStore: {
+    read: (url: string): Promise<unknown | undefined> =>
+      runInDurableObject<EventRelay, unknown | undefined>(
+        accessKeyStoreStub(),
+        (_instance, state) => state.storage.get(url),
+      ),
+    write: (url: string, value: unknown): Promise<void> =>
+      runInDurableObject<EventRelay, void>(
+        accessKeyStoreStub(),
+        async (_instance, state) => state.storage.put(url, value),
+      ),
+  },
+  http: { fetch: globalThis.fetch.bind(globalThis) },
+});
 
 describe.sequential("GitHub webhook ingestion", () => {
   afterEach(async () => {
@@ -342,14 +379,14 @@ describe.sequential("GitHub webhook ingestion", () => {
     const body = payload({ action: "opened" });
     const signature = await sign(`${body} `);
 
-    const rejected = await SELF.fetch("https://relay.example.com/webhooks/github", {
+    const rejected = await SELF.fetch("https://relay.test/webhooks/github", {
       method: "POST",
       headers: headers("issues", "signature-1", signature),
       body,
     });
     await expectError(rejected, 401, "unauthorized");
 
-    const invalidJson = await SELF.fetch("https://relay.example.com/webhooks/github", {
+    const invalidJson = await SELF.fetch("https://relay.test/webhooks/github", {
       method: "POST",
       headers: headers("issues", "signature-2", await sign("not-json")),
       body: "not-json",
@@ -368,7 +405,7 @@ describe.sequential("GitHub webhook ingestion", () => {
       });
       if (signature !== undefined) requestHeaders.set("x-hub-signature-256", signature);
 
-      const response = await SELF.fetch("https://relay.example.com/webhooks/github", {
+      const response = await SELF.fetch("https://relay.test/webhooks/github", {
         method: "POST",
         headers: requestHeaders,
         body,
@@ -380,7 +417,7 @@ describe.sequential("GitHub webhook ingestion", () => {
   it("returns 400 for missing headers or invalid selected fields", async () => {
     const body = payload({ action: "opened" });
     const missingDelivery = await SELF.fetch(
-      "https://relay.example.com/webhooks/github",
+      "https://relay.test/webhooks/github",
       {
         method: "POST",
         headers: {
@@ -393,7 +430,7 @@ describe.sequential("GitHub webhook ingestion", () => {
     await expectError(missingDelivery, 400, "invalid_request");
 
     const missingEvent = await SELF.fetch(
-      "https://relay.example.com/webhooks/github",
+      "https://relay.test/webhooks/github",
       {
         method: "POST",
         headers: {
@@ -476,6 +513,201 @@ describe.sequential("GitHub webhook ingestion", () => {
   });
 });
 
+describe.sequential("authenticated event history", () => {
+  afterEach(async () => {
+    await reset();
+  });
+
+  it("requires an authenticated request", async () => {
+    const response = await SELF.fetch("https://relay.test/api/events");
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "unauthorized",
+        message: "Authentication is required.",
+      },
+    });
+  });
+
+  it("returns stored events in pages and keeps them after reads", async () => {
+    await send("issues", "history-1", payload({ action: "opened" }));
+    await send(
+      "issue_comment",
+      "history-2",
+      payload({ action: "created", comment: { id: 2 }, issue: { number: 1 } }),
+    );
+    const access = await createAccessSession();
+
+    const first = await readHistory(access, "?limit=1");
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({
+      events: [{
+        id: "event_1",
+        deliveryId: "history-1",
+        type: "issues",
+        repository: "owner/repository",
+        receivedAt: expect.any(String),
+        payload: {
+          action: "opened",
+          repository: { full_name: "owner/repository" },
+        },
+      }],
+      cursor: "cursor_1",
+      hasMore: true,
+    });
+
+    const second = await readHistory(access, "?after=cursor_1&limit=1");
+    expect(await second.json()).toMatchObject({
+      events: [{ id: "event_2", deliveryId: "history-2" }],
+      cursor: "cursor_2",
+      hasMore: false,
+    });
+
+    const repeated = await readHistory(access, "?limit=2");
+    expect((await repeated.json() as { events: ReadonlyArray<unknown> }).events)
+      .toHaveLength(2);
+    expect(await readRows()).toHaveLength(2);
+  });
+
+  it("combines filters and does not lose the lookahead event", async () => {
+    await send(
+      "issues",
+      "excluded-repository",
+      payload({ action: "opened" }, "other/repository"),
+    );
+    await send("issues", "matching-1", payload({ action: "opened" }));
+    await send(
+      "issue_comment",
+      "excluded-type",
+      payload({ action: "created", comment: { id: 3 }, issue: { number: 1 } }),
+    );
+    await send("issues", "matching-2", payload({ action: "opened" }));
+    const access = await createAccessSession();
+
+    const first = await readHistory(
+      access,
+      "?repository=owner%2Frepository&type=issues&limit=1",
+    );
+    expect(await first.json()).toMatchObject({
+      events: [{ id: "event_2", deliveryId: "matching-1" }],
+      cursor: "cursor_3",
+      hasMore: true,
+    });
+
+    const second = await readHistory(
+      access,
+      "?after=cursor_3&repository=owner%2Frepository&type=issues&limit=1",
+    );
+    expect(await second.json()).toMatchObject({
+      events: [{ id: "event_4", deliveryId: "matching-2" }],
+      cursor: "cursor_4",
+      hasMore: false,
+    });
+  });
+
+  it("orders positions numerically across filtered lookahead pages", async () => {
+    for (let position = 1; position <= 8; position += 1) {
+      await send(
+        "issues",
+        `numeric-excluded-${position}`,
+        payload({ action: "opened" }, "other/repository"),
+      );
+    }
+    await send("issues", "numeric-match-9", payload({ action: "opened" }));
+    await send(
+      "issue_comment",
+      "numeric-excluded-10",
+      payload({ action: "created", comment: { id: 10 }, issue: { number: 1 } }),
+    );
+    await send("issues", "numeric-match-11", payload({ action: "opened" }));
+    await send(
+      "issues",
+      "numeric-excluded-12",
+      payload({ action: "opened" }, "other/repository"),
+    );
+    const access = await createAccessSession();
+
+    const first = await readHistory(
+      access,
+      "?repository=owner%2Frepository&type=issues&limit=1",
+    );
+    expect(await first.json()).toMatchObject({
+      events: [{ id: "event_9", deliveryId: "numeric-match-9" }],
+      cursor: "cursor_10",
+      hasMore: true,
+    });
+
+    const second = await readHistory(
+      access,
+      "?after=cursor_10&repository=owner%2Frepository&type=issues&limit=1",
+    );
+    expect(await second.json()).toMatchObject({
+      events: [{ id: "event_11", deliveryId: "numeric-match-11" }],
+      cursor: "cursor_12",
+      hasMore: false,
+    });
+  });
+
+  it("advances an empty filtered page to the end of history", async () => {
+    await send("issues", "excluded-1", payload({ action: "opened" }));
+    await send("issues", "excluded-2", payload({ action: "opened" }));
+    const access = await createAccessSession();
+
+    const response = await readHistory(access, "?repository=other%2Frepository");
+    expect(await response.json()).toEqual({
+      events: [],
+      cursor: "cursor_2",
+      hasMore: false,
+    });
+  });
+
+  it.each([
+    ["?limit=0", "invalid_request"],
+    ["?limit=1001", "invalid_request"],
+    ["?limit=1.5", "invalid_request"],
+    ["?limit=value", "invalid_request"],
+    ["?type=push", "invalid_request"],
+    ["?after=cursor_01", "invalid_cursor"],
+    ["?after=cursor_9", "invalid_cursor"],
+  ])("rejects invalid input %s", async (query, code) => {
+    const access = await createAccessSession();
+    const response = await readHistory(access, query);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code } });
+  });
+
+  it("keeps consumer cursors independent after stored history survives eviction", async () => {
+    await send("issues", "persistent-history-1", payload({ action: "opened" }));
+    await evictDurableObject(eventRelayStub());
+    const access = await createAccessSession();
+
+    const firstConsumer = await readHistory(access, "?limit=1");
+    const secondConsumer = await readHistory(access, "?limit=1");
+    expect(await firstConsumer.json()).toMatchObject({ cursor: "cursor_1" });
+    expect(await secondConsumer.json()).toMatchObject({ cursor: "cursor_1" });
+  });
+
+  it("returns the public error when SQLite fails", async () => {
+    await send("issues", "before-history-failure", payload({ action: "opened" }));
+    await runInDurableObject<EventRelay, void>(
+      eventRelayStub(),
+      (_instance, state) => {
+        state.storage.sql.exec("DROP TABLE events");
+      },
+    );
+    const access = await createAccessSession();
+
+    const response = await readHistory(access, "");
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "internal_error",
+        message: "Internal server error.",
+      },
+    });
+  });
+});
+
 type StoredRow = Readonly<{
   position: string;
   delivery_id: string;
@@ -487,6 +719,10 @@ function eventRelayStub(): DurableObjectStub<EventRelay> {
   return env.EVENT_RELAY.get(env.EVENT_RELAY.idFromName(objectName));
 }
 
+function accessKeyStoreStub(): DurableObjectStub<EventRelay> {
+  return env.EVENT_RELAY.get(env.EVENT_RELAY.idFromName("access-key-store"));
+}
+
 async function readRows(): Promise<ReadonlyArray<StoredRow>> {
   return runInDurableObject<EventRelay, ReadonlyArray<StoredRow>>(
     eventRelayStub(),
@@ -494,7 +730,7 @@ async function readRows(): Promise<ReadonlyArray<StoredRow>> {
       `SELECT CAST(position AS TEXT) AS position,
               delivery_id, event_type, payload
        FROM events
-       ORDER BY position`,
+       ORDER BY events.position`,
     ).toArray(),
   );
 }
@@ -510,15 +746,18 @@ async function expectError(
   expect(body.error.message.length).toBeGreaterThan(0);
 }
 
-function payload(fields: Readonly<Record<string, unknown>>): string {
+function payload(
+  fields: Readonly<Record<string, unknown>>,
+  repository = "owner/repository",
+): string {
   return JSON.stringify({
     ...fields,
-    repository: { full_name: "owner/repository" },
+    repository: { full_name: repository },
   });
 }
 
 async function send(event: string, delivery: string, body: string): Promise<Response> {
-  return SELF.fetch("https://relay.example.com/webhooks/github", {
+  return SELF.fetch("https://relay.test/webhooks/github", {
     method: "POST",
     headers: headers(event, delivery, await sign(body)),
     body,
@@ -549,4 +788,113 @@ async function sign(body: string): Promise<string> {
     signature,
     (byte) => byte.toString(16).padStart(2, "0"),
   ).join("")}`;
+}
+
+type AccessSession = Readonly<{ token: string }>;
+
+type HistorySigningKeys = Readonly<{
+  privateKey: CryptoKey;
+  publicJwk: Readonly<{
+    alg: "RS256";
+    e: string;
+    kid: string;
+    kty: "RSA";
+    n: string;
+    use: "sig";
+  }>;
+}>;
+
+async function createAccessSession(): Promise<AccessSession> {
+  const keys = await createHistorySigningKeys();
+  const keyUrl = `${env.ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`;
+  await accessCapabilities.accessKeyStore.write(keyUrl, {
+    keys: [keys.publicJwk],
+  });
+  return {
+    token: await signAccessToken(keys, {
+      aud: env.ACCESS_AUD,
+      email: "lucaxx@gmail.com",
+      exp: Math.floor(Date.now() / 1_000) + 60,
+      iss: env.ACCESS_TEAM_DOMAIN,
+      sub: "history-test-user",
+    }),
+  };
+}
+
+async function createHistorySigningKeys(): Promise<HistorySigningKeys> {
+  const pair = await crypto.subtle.generateKey(
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
+    true,
+    ["sign", "verify"],
+  );
+  const exported = await crypto.subtle.exportKey("jwk", pair.publicKey);
+  if (exported.e === undefined || exported.n === undefined) {
+    throw new Error("The generated test key is not an RSA key.");
+  }
+  return {
+    privateKey: pair.privateKey,
+    publicJwk: {
+      alg: "RS256",
+      e: exported.e,
+      kid: "history-test-key",
+      kty: "RSA",
+      n: exported.n,
+      use: "sig",
+    },
+  };
+}
+
+async function signAccessToken(
+  keys: HistorySigningKeys,
+  claims: Readonly<Record<string, unknown>>,
+): Promise<string> {
+  const header = encodeAccessPart({
+    alg: "RS256",
+    kid: keys.publicJwk.kid,
+    typ: "JWT",
+  });
+  const payloadPart = encodeAccessPart(claims);
+  const data = new TextEncoder().encode(`${header}.${payloadPart}`);
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    keys.privateKey,
+    data,
+  );
+  return `${header}.${payloadPart}.${historyBase64Url(signature)}`;
+}
+
+function encodeAccessPart(value: unknown): string {
+  return historyBase64Url(new TextEncoder().encode(JSON.stringify(value)));
+}
+
+function historyBase64Url(
+  value: ArrayBuffer | Uint8Array<ArrayBuffer>,
+): string {
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
+}
+
+function readHistory(access: AccessSession, query: string): Promise<Response> {
+  return handleRelayRuntimeRequest(
+    accessCapabilities,
+    {
+      accessAudience: env.ACCESS_AUD,
+      accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
+      relayHostname: env.RELAY_HOSTNAME,
+    },
+    env.EVENT_RELAY,
+    new Request(`https://relay.test/api/events${query}`, {
+      headers: { "Cf-Access-Jwt-Assertion": access.token },
+    }),
+  );
 }

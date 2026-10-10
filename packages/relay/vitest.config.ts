@@ -5,7 +5,14 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
-      miniflare: { bindings: { WEBHOOK_SECRET: "test-secret" } },
+      miniflare: {
+        bindings: {
+          ACCESS_AUD: "test-audience",
+          ACCESS_TEAM_DOMAIN: "https://access.test",
+          RELAY_HOSTNAME: "relay.test",
+          WEBHOOK_SECRET: "test-secret",
+        },
+      },
     }),
   ],
 });

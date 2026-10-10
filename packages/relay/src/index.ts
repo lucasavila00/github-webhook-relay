@@ -4,11 +4,16 @@ import { DurableObject } from "cloudflare:workers";
 
 import {
   authenticateAccessRequest,
-  type AccessKeyStoreCapability,
   type ClockCapability as AccessClockCapability,
   type CryptoCapability,
+  type AccessKeyStoreCapability,
   type HttpCapability,
 } from "./access.ts";
+import {
+  createEventHistoryStore,
+  getEventHistory,
+  type EventHistoryStoreCapability,
+} from "./history.ts";
 import {
   createCryptography,
   ingestGitHubWebhook,
@@ -20,11 +25,11 @@ import {
 
 type RelayEnv = Env & Readonly<{ WEBHOOK_SECRET: string }>;
 
-type RuntimeCapability =
-  | HttpCapability
+type AccessCapability =
   | AccessClockCapability
+  | CryptoCapability
   | AccessKeyStoreCapability
-  | CryptoCapability;
+  | HttpCapability;
 
 type RelayConfiguration = Readonly<{
   accessAudience: string;
@@ -32,89 +37,7 @@ type RelayConfiguration = Readonly<{
   relayHostname: string;
 }>;
 
-type WebhookHandler = (request: Request) => Promise<Response>;
-
 const objectName = "github-webhook-relay";
-const notImplemented = (): Response => new Response(null, { status: 501 });
-
-const unauthorized = (): Response =>
-  Response.json(
-    { error: { code: "unauthorized", message: "Authentication is required." } },
-    { status: 401 },
-  );
-
-const forbidden = (): Response =>
-  Response.json(
-    { error: { code: "forbidden", message: "This endpoint is not available." } },
-    { status: 403 },
-  );
-
-const isWebhookRequest = (
-  request: Request,
-  configuration: RelayConfiguration,
-): boolean => {
-  const url = new URL(request.url);
-  return (
-    request.method === "POST" &&
-    url.hostname === configuration.relayHostname &&
-    url.pathname === "/webhooks/github"
-  );
-};
-
-const isWebSocketUpgrade = (request: Request): boolean =>
-  request.headers.get("Upgrade")?.toLowerCase() === "websocket";
-
-export async function handleRelayRequest(
-  capabilities: Capabilities<RuntimeCapability>,
-  configuration: RelayConfiguration,
-  request: Request,
-  handleWebhook: WebhookHandler = async () => notImplemented(),
-): Promise<Response> {
-  if (isWebhookRequest(request, configuration)) {
-    return handleWebhook(request);
-  }
-
-  const principal = await authenticateAccessRequest(
-    capabilities,
-    {
-      audience: configuration.accessAudience,
-      teamDomain: configuration.accessTeamDomain,
-    },
-    request,
-  );
-  if (principal === undefined) return unauthorized();
-  if (
-    isWebSocketUpgrade(request) &&
-    new URL(request.url).hostname !== configuration.relayHostname
-  ) {
-    return forbidden();
-  }
-  return notImplemented();
-}
-
-const createRuntimeCapabilities = (): Capabilities<RuntimeCapability> =>
-  Capabilities.create<RuntimeCapability>({
-    accessKeyStore: {
-      read: async (url: string): Promise<unknown | undefined> => {
-        const cache = await caches.open("access-signing-keys");
-        const response = await cache.match(url);
-        return response === undefined ? undefined : response.json();
-      },
-      write: async (url: string, value: unknown): Promise<void> => {
-        const cache = await caches.open("access-signing-keys");
-        await cache.put(
-          url,
-          Response.json(value, { headers: { "Cache-Control": "max-age=300" } }),
-        );
-      },
-    },
-    clock: { now: Date.now },
-    crypto: {
-      importKey: crypto.subtle.importKey.bind(crypto.subtle),
-      verify: crypto.subtle.verify.bind(crypto.subtle),
-    },
-    http: { fetch: globalThis.fetch.bind(globalThis) },
-  });
 
 export class EventRelay extends DurableObject<RelayEnv> {
   constructor(ctx: DurableObjectState, env: RelayEnv) {
@@ -123,21 +46,24 @@ export class EventRelay extends DurableObject<RelayEnv> {
   }
 
   override fetch(request: Request): Promise<Response> {
-    if (
-      request.method !== "POST" ||
-      new URL(request.url).pathname !== "/webhooks/github"
-    ) {
-      return Promise.resolve(new Response(null, { status: 404 }));
+    const url = new URL(request.url);
+    if (request.method === "POST" && url.pathname === "/webhooks/github") {
+      const capabilities = Capabilities.create<
+        CryptographyCapability | EventStoreCapability | ClockCapability
+      >({
+        cryptography: createCryptography(this.env.WEBHOOK_SECRET),
+        eventStore: createEventStore(this.ctx.storage),
+        clock: { now: () => new Date().toISOString() },
+      });
+      return ingestGitHubWebhook(capabilities, request);
     }
-
-    const capabilities = Capabilities.create<
-      CryptographyCapability | EventStoreCapability | ClockCapability
-    >({
-      cryptography: createCryptography(this.env.WEBHOOK_SECRET),
-      eventStore: createEventStore(this.ctx.storage),
-      clock: { now: () => new Date().toISOString() },
-    });
-    return ingestGitHubWebhook(capabilities, request);
+    if (request.method === "GET" && url.pathname === "/api/events") {
+      const capabilities = Capabilities.create<EventHistoryStoreCapability>({
+        eventHistoryStore: createEventHistoryStore(this.ctx.storage),
+      });
+      return Promise.resolve(getEventHistory(capabilities, request));
+    }
+    return Promise.resolve(new Response(null, { status: 404 }));
   }
 }
 
@@ -188,20 +114,89 @@ export function createEventStore(storage: DurableObjectStorage): EventStore {
 }
 
 export default {
-  fetch(request: Request, env: RelayEnv): Promise<Response> {
-    const webhook = (webhookRequest: Request): Promise<Response> =>
-      env.EVENT_RELAY.get(env.EVENT_RELAY.idFromName(objectName)).fetch(
-        webhookRequest,
-      );
+  async fetch(request: Request, env: RelayEnv): Promise<Response> {
     return handleRelayRequest(
-      createRuntimeCapabilities(),
+      createAccessCapabilities(),
       {
         accessAudience: env.ACCESS_AUD,
         accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
         relayHostname: env.RELAY_HOSTNAME,
       },
+      env.EVENT_RELAY,
       request,
-      webhook,
     );
   },
 } satisfies ExportedHandler<RelayEnv>;
+
+export async function handleRelayRequest(
+  capabilities: Capabilities<AccessCapability>,
+  configuration: RelayConfiguration,
+  eventRelay: DurableObjectNamespace<EventRelay>,
+  request: Request,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const webhook = request.method === "POST" &&
+    url.hostname === configuration.relayHostname &&
+    url.pathname === "/webhooks/github";
+  if (!webhook) {
+    const principal = await authenticateAccessRequest(
+      capabilities,
+      {
+        audience: configuration.accessAudience,
+        teamDomain: configuration.accessTeamDomain,
+      },
+      request,
+    );
+    if (principal === undefined) {
+      return Response.json(
+        {
+          error: {
+            code: "unauthorized",
+            message: "Authentication is required.",
+          },
+        },
+        { status: 401 },
+      );
+    }
+    if (
+      request.headers.get("Upgrade")?.toLowerCase() === "websocket" &&
+      url.hostname !== configuration.relayHostname
+    ) {
+      return Response.json(
+        {
+          error: {
+            code: "forbidden",
+            message: "This endpoint is not available.",
+          },
+        },
+        { status: 403 },
+      );
+    }
+  }
+  return eventRelay.get(eventRelay.idFromName(objectName)).fetch(request);
+}
+
+function createAccessCapabilities(): Capabilities<AccessCapability> {
+  return Capabilities.create<AccessCapability>({
+    clock: { now: Date.now },
+    crypto: {
+      importKey: crypto.subtle.importKey.bind(crypto.subtle),
+      verify: crypto.subtle.verify.bind(crypto.subtle),
+    },
+    accessKeyStore: {
+      read: async (url: string): Promise<unknown | undefined> => {
+        const cache = await caches.open("access-signing-keys");
+        const response = await cache.match(new Request(url));
+        return response === undefined ? undefined : response.json();
+      },
+      write: async (url: string, value: unknown): Promise<void> => {
+        const cache = await caches.open("access-signing-keys");
+        await cache.put(
+          new Request(url),
+          Response.json(value, { headers: { "Cache-Control": "max-age=300" } }),
+        );
+      },
+    },
+    http: { fetch: globalThis.fetch.bind(globalThis) },
+  });
+}
