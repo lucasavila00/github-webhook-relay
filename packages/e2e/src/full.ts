@@ -82,7 +82,7 @@ async function verifyToolReplay(
   const consumer = `live-e2e-offline-${toolCapabilities.clock.now().getTime()}`;
   let session = await toolCapabilities.tool.open(consumer, stateDirectory);
   const expectedIds = new Set(expected.map(({ id }) => id));
-  const found = new Set<string>();
+  let found: ReadonlySet<string> = new Set<string>();
   let replayed = false;
   while (found.size < expectedIds.size) {
     const batch = await session.watch();
@@ -93,11 +93,11 @@ async function verifyToolReplay(
       session = await toolCapabilities.tool.open(consumer, stateDirectory);
       const repeated = await session.watch();
       requireSameBatch(batch, repeated);
-      collectExpected(repeated, expectedIds, found);
+      found = collectExpected(repeated, expectedIds, found);
       await session.acknowledge(repeated);
       replayed = true;
     } else {
-      collectExpected(batch, expectedIds, found);
+      found = collectExpected(batch, expectedIds, found);
       await session.acknowledge(batch);
     }
   }
@@ -112,14 +112,19 @@ async function verifyIndependentConsumers(
 ): Promise<void> {
   const suffix = toolCapabilities.clock.now().getTime();
   const first = await toolCapabilities.tool.open(`live-e2e-a-${suffix}`, stateDirectory);
-  const second = await toolCapabilities.tool.open(`live-e2e-b-${suffix}`, stateDirectory);
   try {
-    await Promise.all([
-      scanExpected(first, expected),
-      scanExpected(second, expected),
-    ]);
+    await scanExpected(first, expected);
   } finally {
-    await Promise.all([first.close(), second.close()]);
+    await first.close();
+  }
+  const second = await toolCapabilities.tool.open(
+    `live-e2e-b-${suffix}`,
+    stateDirectory,
+  );
+  try {
+    await scanExpected(second, expected);
+  } finally {
+    await second.close();
   }
 }
 
@@ -128,11 +133,11 @@ async function scanExpected(
   expected: ReadonlyArray<Event>,
 ): Promise<void> {
   const expectedIds = new Set(expected.map(({ id }) => id));
-  const found = new Set<string>();
+  let found: ReadonlySet<string> = new Set<string>();
   while (found.size < expectedIds.size) {
     const batch = await session.watch();
     if (batch.type !== "batch") throw new Error("The watch tool timed out.");
-    collectExpected(batch, expectedIds, found);
+    found = collectExpected(batch, expectedIds, found);
     await session.acknowledge(batch);
   }
 }
@@ -140,13 +145,16 @@ async function scanExpected(
 function collectExpected(
   result: unknown,
   expectedIds: ReadonlySet<string>,
-  found: Set<string>,
-): void {
+  found: ReadonlySet<string>,
+): ReadonlySet<string> {
   const parsed = Parsers.WatchResult.parse(result);
   if (parsed.type !== "batch") throw new Error("The watch tool timed out.");
-  for (const event of parsed.events) {
-    if (expectedIds.has(event.id)) found.add(event.id);
-  }
+  return new Set([
+    ...found,
+    ...parsed.events
+      .filter(({ id }) => expectedIds.has(id))
+      .map(({ id }) => id),
+  ]);
 }
 
 function requireSameBatch(first: unknown, second: unknown): void {
