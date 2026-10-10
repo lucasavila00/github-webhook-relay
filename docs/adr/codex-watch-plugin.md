@@ -16,14 +16,12 @@ Codex compatibility layout. A repo marketplace at
 `.agents/plugins/marketplace.json` exposes the plugin. The package does not
 need hooks, an app, or a UI.
 
-The plugin starts one bundled Node.js stdio MCP server. Esbuild produces one
-ESM file that includes the local client, the maintained official MCP TypeScript
-SDK, and all other runtime dependencies. Only Node.js built-ins stay external.
+The plugin starts one bundled Node.js stdio MCP server. Esbuild includes the
+local client, official MCP TypeScript SDK, and all non-built-in dependencies.
 The MCP manifest runs `node ./dist/server.mjs` from the plugin root and passes
 the four named configuration variables from the Codex environment. The
-portable MCP format cannot pass named host environment variables in Codex
-0.162.1. Thus, the installed plugin has no path to the checkout or a workspace
-package. The server exposes only these tools:
+portable format cannot pass these host variables in Codex 0.162.1. The
+installed plugin has no checkout or workspace dependency. It exposes only:
 
 ```ts
 watch(input: Readonly<{
