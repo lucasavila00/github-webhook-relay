@@ -4,14 +4,16 @@ The repository is a pnpm workspace with four packages:
 
 | Path | Package | Owner |
 | --- | --- | --- |
-| `packages/contracts` | `@github-webhook-relay/contracts` | Wire types and Beff validators |
-| `packages/relay` | `@github-webhook-relay/relay` | Worker and Durable Object deployment |
+| `packages/core` | `@github-webhook-relay/core` | Application data types and Beff validators |
+| `packages/relay` | `@github-webhook-relay/relay` | Relay Worker and Durable Object |
 | `packages/webapp` | `@github-webhook-relay/webapp` | Browser and asset server functions |
 | `packages/local` | `@github-webhook-relay/local` | Local Node.js integration |
 
-The contracts package has no browser, Cloudflare, or Node.js dependency. The
-other packages can depend on contracts. Cloudflare bindings stay in the
-package that deploys them.
+The core package owns all application data types and all Beff-generated
+validators. It has no browser, Cloudflare, or Node.js dependency. The other
+packages can depend on core. Runtime adapter and DIY capability interfaces stay
+with their implementations. Cloudflare bindings stay in the package that
+deploys them.
 
 The relay package owns the only production Wrangler deployment. Its build
 includes the webapp Vite output as static assets. The relay Worker runs first,

@@ -9,7 +9,7 @@ import { Capabilities } from "@beff/diy/capabilities";
 import {
   Parsers,
   type ErrorCode,
-} from "@github-webhook-relay/contracts";
+} from "@github-webhook-relay/core";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AssetCapability } from "@github-webhook-relay/webapp/server";
 

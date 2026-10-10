@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@beff/diy": "0.0.33",
-    "@github-webhook-relay/contracts": "workspace:*",
+    "@github-webhook-relay/core": "workspace:*",
     "preact": "11.0.1"
   },
   "devDependencies": {

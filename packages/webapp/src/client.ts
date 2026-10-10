@@ -1,5 +1,5 @@
 import type { Capabilities, Capability } from "@beff/diy/capabilities";
-import { Parsers, type Cursor, type EventFilters, type EventPage, type StreamMessage, type Subscribe } from "@github-webhook-relay/contracts";
+import { Parsers, type Cursor, type EventFilters, type EventPage, type StreamMessage, type Subscribe } from "@github-webhook-relay/core";
 
 export type HttpCapability = Capability<"http", Readonly<{ fetch: typeof globalThis.fetch }>>;
 export type ClockCapability = Capability<"clock", Readonly<{ delay: (milliseconds: number) => Promise<void> }>>;

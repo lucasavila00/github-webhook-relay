@@ -1,4 +1,4 @@
-import type { Cursor, Event, EventFilters, EventPage, StreamMessage } from "@github-webhook-relay/contracts";
+import type { Cursor, Event, EventFilters, EventPage, StreamMessage } from "@github-webhook-relay/core";
 
 export type Connection = "connecting" | "live" | "disconnected";
 export type Ready = Readonly<{

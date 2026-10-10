@@ -173,7 +173,7 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
-  packages/contracts:
+  packages/core:
     dependencies:
       '@beff/client':
         specifier: 0.0.152
@@ -194,9 +194,9 @@ importers:
       '@beff/diy':
         specifier: 0.0.33
         version: 0.0.33
-      '@github-webhook-relay/contracts':
+      '@github-webhook-relay/core':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../core
     devDependencies:
       '@types/node':
         specifier: 24.10.0
@@ -210,22 +210,16 @@ importers:
 
   packages/relay:
     dependencies:
-      '@beff/client':
-        specifier: 0.0.152
-        version: 0.0.152(zod@3.25.76)
       '@beff/diy':
         specifier: 0.0.33
         version: 0.0.33
-      '@github-webhook-relay/contracts':
+      '@github-webhook-relay/core':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../core
       '@github-webhook-relay/webapp':
         specifier: workspace:*
         version: link:../webapp
     devDependencies:
-      '@beff/cli':
-        specifier: 0.0.152
-        version: 0.0.152
       '@cloudflare/vitest-plugin':
         specifier: 1.4.0
         version: 1.4.0(@types/node@24.10.0)(vitest@4.1.0)
@@ -244,9 +238,9 @@ importers:
       '@beff/diy':
         specifier: 0.0.33
         version: 0.0.33
-      '@github-webhook-relay/contracts':
+      '@github-webhook-relay/core':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../core
       preact:
         specifier: 11.0.1
         version: 11.0.1

@@ -1,5 +1,5 @@
 import type { Capabilities } from "@beff/diy/capabilities";
-import type { EventFilters, EventType } from "@github-webhook-relay/contracts";
+import type { EventFilters, EventType } from "@github-webhook-relay/core";
 import { useEffect, useReducer, useState } from "preact/hooks";
 
 import {
