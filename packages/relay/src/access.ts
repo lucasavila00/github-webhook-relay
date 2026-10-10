@@ -1,5 +1,5 @@
 import type { Capabilities, Capability } from "@beff/diy";
-import { Parsers, type AccessKeySet } from "@github-webhook-relay/contracts";
+import { Parsers, type AccessKeySet } from "@github-webhook-relay/core";
 
 type HttpClient = Readonly<{ fetch: typeof fetch }>;
 type Clock = Readonly<{ now: () => number }>;
