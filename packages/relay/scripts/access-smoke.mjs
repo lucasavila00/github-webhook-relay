@@ -71,7 +71,7 @@ const webhookSecret = required("GITHUB_WEBHOOK_SECRET");
 const validHttp = await fetch(new URL("/api/events", relayUrl), {
   headers: serviceHeaders(clientSecret),
 });
-expectStatus("valid service HTTP", validHttp.status, [501]);
+expectStatus("valid service HTTP", validHttp.status, [200]);
 
 const invalidHttp = await fetch(new URL("/api/events", relayUrl), {
   headers: serviceHeaders(`${clientSecret}-invalid`),
@@ -80,7 +80,7 @@ const invalidHttp = await fetch(new URL("/api/events", relayUrl), {
 expectStatus("invalid service HTTP", invalidHttp.status, [403]);
 
 const customUpgrade = await getUpgradeStatus(relayUrl, serviceHeaders(clientSecret));
-expectStatus("custom-host WebSocket", customUpgrade, [101, 501]);
+expectStatus("custom-host WebSocket", customUpgrade, [101]);
 
 const deniedCustomUpgrade = await getUpgradeStatus(
   relayUrl,
@@ -111,9 +111,14 @@ const webhookSignature = createHmac("sha256", webhookSecret)
 const webhook = await fetch(new URL("/webhooks/github", relayUrl), {
   method: "POST",
   body: webhookBody,
-  headers: { "X-Hub-Signature-256": `sha256=${webhookSignature}` },
+  headers: {
+    "Content-Type": "application/json",
+    "X-GitHub-Delivery": "access-smoke-ping",
+    "X-GitHub-Event": "ping",
+    "X-Hub-Signature-256": `sha256=${webhookSignature}`,
+  },
 });
-expectStatus("signed webhook", webhook.status, [501]);
+expectStatus("signed webhook", webhook.status, [204]);
 
 const invalidWebhook = await fetch(new URL("/webhooks/github", relayUrl), {
   method: "POST",
