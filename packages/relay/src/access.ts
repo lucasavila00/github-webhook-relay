@@ -1,4 +1,5 @@
 import type { Capabilities, Capability } from "@beff/diy";
+import { Parsers, type AccessKeySet } from "@github-webhook-relay/contracts";
 
 type HttpClient = Readonly<{ fetch: typeof fetch }>;
 type Clock = Readonly<{ now: () => number }>;
@@ -25,14 +26,7 @@ export type AccessPrincipal =
   | Readonly<{ kind: "identity"; subject: string; email?: string }>
   | Readonly<{ kind: "service"; clientId: string }>;
 
-type AccessKey = Readonly<{
-  alg: "RS256";
-  e: string;
-  kid: string;
-  kty: "RSA";
-  n: string;
-  use: "sig";
-}>;
+type AccessKey = AccessKeySet["keys"][number];
 
 type ParsedToken = Readonly<{
   encodedHeader: string;
@@ -48,9 +42,6 @@ type ParsedToken = Readonly<{
   }>;
   signature: Uint8Array<ArrayBuffer>;
 }>;
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const decodeBase64Url = (value: string): Uint8Array<ArrayBuffer> | undefined => {
   try {
@@ -76,17 +67,6 @@ const decodeJson = (value: string): unknown => {
   }
 };
 
-const parseAudience = (value: unknown): string | ReadonlyArray<string> | undefined => {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
-    return value;
-  }
-  return undefined;
-};
-
-const optionalString = (value: unknown): string | undefined =>
-  typeof value === "string" ? value : undefined;
-
 const parseToken = (token: string): ParsedToken | undefined => {
   const parts = token.split(".");
   if (parts.length !== 3) return undefined;
@@ -97,61 +77,34 @@ const parseToken = (token: string): ParsedToken | undefined => {
     return undefined;
   }
 
-  const header = decodeJson(encodedHeader);
-  const payload = decodeJson(encodedPayload);
+  const headerResult = Parsers.AccessJwtHeader.safeParse(decodeJson(encodedHeader));
+  const payloadResult = Parsers.AccessJwtPayload.safeParse(decodeJson(encodedPayload));
   const signature = decodeBase64Url(encodedSignature);
-  if (!isRecord(header) || !isRecord(payload) || signature === undefined) return undefined;
-
-  const audience = parseAudience(payload.aud);
-  if (
-    header.alg !== "RS256" ||
-    typeof header.kid !== "string" ||
-    audience === undefined ||
-    typeof payload.exp !== "number" ||
-    typeof payload.iss !== "string" ||
-    typeof payload.sub !== "string"
-  ) {
+  if (!headerResult.success || !payloadResult.success || signature === undefined) {
     return undefined;
   }
-
-  const commonName = optionalString(payload.common_name);
-  const email = optionalString(payload.email);
+  const header = headerResult.data;
+  const payload = payloadResult.data;
 
   return {
     encodedHeader,
     encodedPayload,
     header: { kid: header.kid },
     payload: {
-      aud: audience,
+      aud: payload.aud,
       exp: payload.exp,
       issuer: payload.iss,
       subject: payload.sub,
-      ...(commonName === undefined ? {} : { commonName }),
-      ...(email === undefined ? {} : { email }),
+      ...(payload.common_name === undefined ? {} : { commonName: payload.common_name }),
+      ...(payload.email === undefined ? {} : { email: payload.email }),
     },
     signature,
   };
 };
 
-const parseAccessKey = (value: unknown): AccessKey | undefined => {
-  if (
-    !isRecord(value) ||
-    value.alg !== "RS256" ||
-    typeof value.e !== "string" ||
-    typeof value.kid !== "string" ||
-    value.kty !== "RSA" ||
-    typeof value.n !== "string" ||
-    value.use !== "sig"
-  ) return undefined;
-
-  return { alg: value.alg, e: value.e, kid: value.kid, kty: value.kty, n: value.n, use: value.use };
-};
-
 const parseAccessKeys = (value: unknown): ReadonlyArray<AccessKey> | undefined => {
-  if (!isRecord(value) || !Array.isArray(value.keys)) return undefined;
-  const keys = value.keys.map(parseAccessKey);
-  if (keys.some((key) => key === undefined)) return undefined;
-  return keys.filter((key): key is AccessKey => key !== undefined);
+  const result = Parsers.AccessKeySet.safeParse(value);
+  return result.success ? result.data.keys : undefined;
 };
 
 const normalizeTeamDomain = (teamDomain: string): string =>

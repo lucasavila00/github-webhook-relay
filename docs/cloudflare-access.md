@@ -109,9 +109,19 @@ Run the provider smoke check:
 pnpm --filter @github-webhook-relay/relay smoke:access
 ```
 
-The check covers a valid and invalid service token, an HTTP request, the
-custom-host WebSocket path, the signed webhook exception, and the alternate
-Worker URL. Also use a private browser session to confirm that
+The check requires `403` for invalid credentials on custom-host HTTP and
+WebSocket requests. It also requires `403` for an authenticated WebSocket
+request and an unauthenticated HTTP request on the alternate Worker URL. It
+checks valid custom-host HTTP and WebSocket requests and the signed webhook
+exception. Also use a private browser session to confirm that
 `lucaxx@gmail.com` can sign in and another email cannot sign in. Repeat the
-service checks after token deletion or rotation. Record this provider proof
-before issue #10 is complete.
+service checks after token deletion or rotation. Use the deleted or old token
+values and run only the revocation checks:
+
+```sh
+ACCESS_SMOKE_MODE=revocation pnpm --filter @github-webhook-relay/relay smoke:access
+```
+
+Revocation mode requires `403` for a new HTTP request and a new WebSocket
+connection. It does not first require the old token to be valid. Record this
+provider proof before issue #10 is complete.

@@ -10,10 +10,12 @@ const required = (name) => {
 };
 
 const relayUrl = required("RELAY_URL");
-const alternateRelayUrl = required("ALTERNATE_RELAY_URL");
 const clientId = required("ACCESS_CLIENT_ID");
 const clientSecret = required("ACCESS_CLIENT_SECRET");
-const webhookSecret = required("GITHUB_WEBHOOK_SECRET");
+const mode = process.env.ACCESS_SMOKE_MODE ?? "active";
+if (mode !== "active" && mode !== "revocation") {
+  throw new Error("ACCESS_SMOKE_MODE must be active or revocation.");
+}
 
 const serviceHeaders = (secret) => ({
   "CF-Access-Client-Id": clientId,
@@ -48,6 +50,24 @@ const getUpgradeStatus = (baseUrl, headers) =>
     call.end();
   });
 
+if (mode === "revocation") {
+  const revokedHttp = await fetch(new URL("/api/events", relayUrl), {
+    headers: serviceHeaders(clientSecret),
+    redirect: "manual",
+  });
+  expectStatus("revoked service HTTP", revokedHttp.status, [403]);
+
+  const revokedUpgrade = await getUpgradeStatus(
+    relayUrl,
+    serviceHeaders(clientSecret),
+  );
+  expectStatus("revoked service WebSocket", revokedUpgrade, [403]);
+  process.exit(0);
+}
+
+const alternateRelayUrl = required("ALTERNATE_RELAY_URL");
+const webhookSecret = required("GITHUB_WEBHOOK_SECRET");
+
 const validHttp = await fetch(new URL("/api/events", relayUrl), {
   headers: serviceHeaders(clientSecret),
 });
@@ -57,19 +77,32 @@ const invalidHttp = await fetch(new URL("/api/events", relayUrl), {
   headers: serviceHeaders(`${clientSecret}-invalid`),
   redirect: "manual",
 });
-if (invalidHttp.status === 501) {
-  throw new Error("invalid service HTTP reached the Worker.");
-}
-process.stdout.write(`invalid service HTTP: ${invalidHttp.status}\n`);
+expectStatus("invalid service HTTP", invalidHttp.status, [403]);
 
 const customUpgrade = await getUpgradeStatus(relayUrl, serviceHeaders(clientSecret));
 expectStatus("custom-host WebSocket", customUpgrade, [101, 501]);
+
+const deniedCustomUpgrade = await getUpgradeStatus(
+  relayUrl,
+  serviceHeaders(`${clientSecret}-invalid`),
+);
+expectStatus("invalid service custom-host WebSocket", deniedCustomUpgrade, [403]);
 
 const alternateUpgrade = await getUpgradeStatus(
   alternateRelayUrl,
   serviceHeaders(clientSecret),
 );
 expectStatus("alternate-host WebSocket", alternateUpgrade, [403]);
+
+const unauthenticatedAlternateHttp = await fetch(
+  new URL("/api/events", alternateRelayUrl),
+  { redirect: "manual" },
+);
+expectStatus(
+  "unauthenticated alternate-host HTTP",
+  unauthenticatedAlternateHttp.status,
+  [403],
+);
 
 const webhookBody = JSON.stringify({ zen: "access-smoke" });
 const webhookSignature = createHmac("sha256", webhookSecret)
