@@ -39,15 +39,16 @@ come from the stored SQLite position, so a reconnect repeats the same IDs.
 
 The relay uses the Durable Object WebSocket Hibernation API. A socket attachment
 contains only its small connection key, last sent cursor, and delivery-budget
-use. SQLite stores the filters because the public repository string can exceed
-the attachment size limit. After hibernation, the adapter reads the filters by
-the connection key. It deletes that connection row on socket close or error.
-This lifecycle data has no effect on the retained event log.
+use. SQLite stores filters with repository values of at most 1,000,000 UTF-8
+bytes. The event row stores the repository in its column and original payload,
+so a longer value cannot fit in SQLite's 2 MB row limit and cannot match an
+event. For a longer filter, the relay stores a compact cannot-match marker and
+still scans all positions and sends checkpoints. After hibernation, the adapter
+reads this metadata by connection key. It deletes the row on close or error.
 
 The adapter updates the attachment after it sends the checkpoint. If a turn
 fails between the send and the update, reconnect can repeat an event but cannot
-skip it. The object reconstructs no shared mutable application session state
-after hibernation.
+skip it.
 
 Each connection can scan at most 1,000 positions or send 8 MiB of serialized
 messages. At a budget boundary, the relay finishes the current event and its
@@ -77,4 +78,3 @@ budget closes, reconnect duplicates, and independent subscriptions.
 
 - Active consumers reconnect periodically when they reach a delivery budget.
 - A client can receive an event again after disconnect or runtime failure.
-- The 10-second subscription timer delays hibernation only for new sockets.
