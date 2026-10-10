@@ -6,19 +6,15 @@ protected workflows pass after they reach the default branch.
 
 ## Cloudflare setup
 
-Use one Cloudflare account, zone, and custom hostname. Create a Cloudflare
-Access application for the exact relay hostname. Add an Allow policy for the
-operator email and a Service Auth policy for the `gh-watch` service token.
-
-Create a second application for this exact path:
-
-```text
-https://<relay-host>/webhooks/github
-```
-
-Give only this path an Everyone Bypass policy. Add no other bypass path. Also
-attach Access to the Worker URL so alternate and preview URLs cannot bypass the
-custom-host policy. No Cloudflare Tunnel is necessary.
+Use [Getting started](getting-started.md) for the first local client and
+[Deployment](deployment.md) for the complete Cloudflare and GitHub setup. The
+deployment uses two role-specific Workers and two custom hostnames. The small
+ingress Worker accepts only `POST /webhooks/github` and sends the request to
+the existing `EventRelay` Durable Object in the relay Worker. The relay Worker
+serves the browser, history API, and WebSocket API behind Cloudflare Access.
+Do not put the webhook hostname in the Access application and do not add an
+Access bypass path. Workers.dev and preview URLs stay disabled for both
+Workers.
 
 Create the GitHub `production` environment. Configure its deployment
 protection rules to require Lucas as a reviewer. Keep self-review enabled
@@ -37,13 +33,14 @@ repository-hook delivery access in the test repository.
 Add these environment variables:
 
 ```text
-ACCESS_AUD  ACCESS_TEAM_DOMAIN  RELAY_HOSTNAME  RELAY_URL
-ALTERNATE_RELAY_URL
+ACCESS_AUD  ACCESS_TEAM_DOMAIN  WEBHOOK_HOSTNAME  WEBHOOK_URL
+RELAY_HOSTNAME  RELAY_URL
 GITHUB_E2E_REPOSITORY  GITHUB_E2E_HOOK_ID
 ```
 
-`RELAY_URL` is `https://<relay-host>`. Keep credentials out of repository
-variables, source files, workflow artifacts, and logs.
+`WEBHOOK_URL` is `https://<webhook-host>/webhooks/github`. `RELAY_URL` is
+`https://<relay-host>`. The two hostnames must differ. Keep credentials out of
+repository variables, source files, workflow artifacts, and logs.
 
 ## Pre-merge deployment and proof
 
@@ -66,17 +63,22 @@ pnpm generate
 cd packages/relay
 pnpm exec wrangler secret put WEBHOOK_SECRET
 pnpm exec wrangler deploy \
+  --config wrangler.jsonc \
   --var "ACCESS_AUD:$ACCESS_AUD" \
   --var "ACCESS_TEAM_DOMAIN:$ACCESS_TEAM_DOMAIN" \
-  --var "RELAY_HOSTNAME:$RELAY_HOSTNAME" \
   --domain "$RELAY_HOSTNAME"
+pnpm exec wrangler deploy \
+  --config wrangler.ingress.jsonc \
+  --domain "$WEBHOOK_HOSTNAME"
 ```
 
 Enter `GITHUB_WEBHOOK_SECRET` only at the Wrangler secret prompt. These are the
-same build, secret, variable, custom-host, and deploy operations as the
+same build, secret, variable, and ordered deploy operations as the
 reviewed `Deploy` workflow. They preserve the `github-webhook-relay` Worker,
 `EVENT_RELAY` binding, `EventRelay` class, `v1` SQLite migration, and existing
-Durable Object namespace. Do not create a second webapp Worker.
+Durable Object namespace. The `github-webhook-relay-ingress` Worker uses an
+external `EVENT_RELAY` binding to that owner. It does not create a second
+Durable Object namespace or a second webapp Worker.
 
 Return to the repository root. Set `ACTIONS_RUN_URL` to the successful hosted
 CI run. Configure the repository webhook as described in the next section.
@@ -107,7 +109,7 @@ After these workflow files merge to the default branch, use the protected
 Create one repository webhook at:
 
 ```text
-https://<relay-host>/webhooks/github
+https://<webhook-host>/webhooks/github
 ```
 
 Use `application/json` and the same value as `GITHUB_WEBHOOK_SECRET`. Subscribe
@@ -148,10 +150,13 @@ the automated part of the proof with real GitHub and Cloudflare resources. It
 creates one event of each supported type, waits for storage, and verifies
 service-authenticated history, WebSockets, real Chromium display, GitHub
 redelivery deduplication, offline replay, and two independent MCP consumers.
-It requires missing and invalid credentials to fail on the custom hostname. It
-also requires unauthenticated HTTP and an authenticated WebSocket to fail on
-`ALTERNATE_RELAY_URL`. The artifact records the tested commit and Actions run
-URL.
+It requires missing and invalid credentials to fail on the relay hostname. It
+also requires unsigned and incorrectly signed webhook requests to return 401
+without an Access redirect. Authenticated history and WebSocket requests on
+the webhook hostname must return 404, and an authenticated webhook request on
+the relay hostname must return 404. These checks prove that the two hostnames
+have different boundaries. The artifact records the tested commit and Actions
+run URL.
 
 Use a private browser to sign in as the configured operator through the real
 identity provider. Confirm that all four E2E events appear. Use another email

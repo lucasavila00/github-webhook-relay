@@ -20,7 +20,8 @@ jobs:
     environment: production
     env:
       RELAY_URL: ${{ vars.RELAY_URL }}
-      ALTERNATE_RELAY_URL: ${{ vars.ALTERNATE_RELAY_URL }}
+      WEBHOOK_HOSTNAME: ${{ vars.WEBHOOK_HOSTNAME }}
+      WEBHOOK_URL: ${{ vars.WEBHOOK_URL }}
       GITHUB_E2E_REPOSITORY: ${{ vars.GITHUB_E2E_REPOSITORY }}
       GITHUB_E2E_HOOK_ID: ${{ vars.GITHUB_E2E_HOOK_ID }}
       GITHUB_E2E_TOKEN: ${{ secrets.GITHUB_E2E_TOKEN }}

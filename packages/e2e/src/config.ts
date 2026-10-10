@@ -5,7 +5,8 @@ export function readConfig(
 ): LiveE2eConfig {
   return Parsers.LiveE2eConfig.parse({
     relayUrl: environment.RELAY_URL,
-    alternateRelayUrl: environment.ALTERNATE_RELAY_URL,
+    webhookHostname: environment.WEBHOOK_HOSTNAME,
+    webhookUrl: environment.WEBHOOK_URL,
     githubToken: environment.GITHUB_E2E_TOKEN,
     githubRepository: environment.GITHUB_E2E_REPOSITORY,
     githubHookId: environment.GITHUB_E2E_HOOK_ID,

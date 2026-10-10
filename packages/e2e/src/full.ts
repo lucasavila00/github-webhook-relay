@@ -76,6 +76,8 @@ const report: LiveE2eReport = Parsers.LiveE2eReport.parse({
   duplicateVerified: true,
   offlineReplayVerified: true,
   independentConsumersVerified: true,
+  hostnameBoundariesVerified: true,
+  invalidSignatureVerified: true,
 });
 capabilities.output.write(JSON.stringify(report));
 

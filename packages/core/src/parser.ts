@@ -108,7 +108,8 @@ export type AcknowledgeToolInput = Readonly<{
 
 export type LiveE2eConfig = Readonly<{
   relayUrl: NonEmptyString;
-  alternateRelayUrl: NonEmptyString;
+  webhookHostname: NonEmptyString;
+  webhookUrl: NonEmptyString;
   githubToken: NonEmptyString;
   githubRepository: NonEmptyString;
   githubHookId: NonEmptyString;
@@ -128,6 +129,8 @@ export type LiveE2eReport = Readonly<{
   duplicateVerified: true;
   offlineReplayVerified: true;
   independentConsumersVerified: true;
+  hostnameBoundariesVerified: true;
+  invalidSignatureVerified: true;
 }>;
 export type GitHubE2eRepository = Readonly<{ default_branch: string }>;
 export type GitHubE2eReference = Readonly<{
