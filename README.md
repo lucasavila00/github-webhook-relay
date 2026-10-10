@@ -15,16 +15,18 @@ from its last processed position. Reading an event does not delete it.
 
 ## Components
 
-The pnpm workspace contains four packages:
+The pnpm workspace contains five packages:
 
-- A Cloudflare Worker and SQLite-backed Durable Object for webhook ingestion,
-  persistent event storage, queries, replay, and live subscriptions.
-- A webapp with a server for sign-in, authorized access, and event browsing.
-- A local Codex integration that consumes events and connects them to local
-  agent work.
-- Documentation for the public contract, setup, and operation.
+- A core package owns shared data types and validators.
+- A relay package owns two Cloudflare Workers and one SQLite-backed Durable
+  Object. The public Worker accepts signed webhooks. The Access-protected
+  Worker serves event history, live subscriptions, and the webapp.
+- A webapp package owns the browser and asset server functions.
+- A local package connects outbound to the relay and saves consumer cursors.
+- A Codex tool package exposes the local client through the `gh-watch` plugin.
 
-Deployment details remain with the packages that own them.
+See the [workspace guide](docs/workspace.md) for component ownership and the
+[deployment guide](docs/deployment.md) for production setup.
 
 ## Public API
 
