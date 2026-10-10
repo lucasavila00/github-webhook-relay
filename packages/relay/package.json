@@ -6,7 +6,8 @@
   "scripts": {
     "generate": "wrangler types",
     "check": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:access": "node scripts/access-smoke.mjs"
   },
   "dependencies": {
     "@beff/diy": "0.0.33",

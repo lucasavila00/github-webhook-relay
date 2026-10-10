@@ -1,7 +1,8 @@
 # GitHub webhook relay
 
-Draft public contract for review. Nothing described below is implemented yet.
-Endpoint names and message shapes are proposals.
+Draft public contract for review. The authentication boundary is implemented.
+Event storage and delivery are not implemented. Endpoint names and message
+shapes are proposals.
 
 ## Purpose
 
@@ -89,10 +90,10 @@ work. Each consumer keeps its own cursor.
 
 ### Authentication and errors
 
-Event history and subscriptions require authentication. The webapp server
-must authorize access, and the local client needs a credential that can be
-revoked. The sign-in provider, client pairing flow, credential transport,
-and access scope remain open decisions.
+Event history and subscriptions use Cloudflare Access. The browser signs in
+with a one-time PIN and an exact email policy for Lucas. The local client uses
+a revocable Access service token on HTTP requests and WebSocket upgrades. See
+[Cloudflare Access setup](docs/cloudflare-access.md).
 
 HTTP errors use a JSON body with `error.code` and `error.message`. Exact
 status codes, stream errors, page limits, and slow-client behavior belong in
