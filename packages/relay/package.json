@@ -4,17 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "wrangler types && beff -p beff.json",
+    "generate": "wrangler types",
     "check": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
-    "@beff/client": "0.0.152",
     "@beff/diy": "0.0.33",
-    "@github-webhook-relay/contracts": "workspace:*"
+    "@github-webhook-relay/core": "workspace:*"
   },
   "devDependencies": {
-    "@beff/cli": "0.0.152",
     "@cloudflare/vitest-plugin": "1.4.0",
     "typescript": "7.0.2",
     "vitest": "4.1.0",
