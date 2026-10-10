@@ -357,6 +357,49 @@ describe.sequential("authenticated event history", () => {
     });
   });
 
+  it("orders positions numerically across filtered lookahead pages", async () => {
+    for (let position = 1; position <= 8; position += 1) {
+      await send(
+        "issues",
+        `numeric-excluded-${position}`,
+        payload({ action: "opened" }, "other/repository"),
+      );
+    }
+    await send("issues", "numeric-match-9", payload({ action: "opened" }));
+    await send(
+      "issue_comment",
+      "numeric-excluded-10",
+      payload({ action: "created", comment: { id: 10 }, issue: { number: 1 } }),
+    );
+    await send("issues", "numeric-match-11", payload({ action: "opened" }));
+    await send(
+      "issues",
+      "numeric-excluded-12",
+      payload({ action: "opened" }, "other/repository"),
+    );
+    const access = await createAccessSession();
+
+    const first = await readHistory(
+      access,
+      "?repository=owner%2Frepository&type=issues&limit=1",
+    );
+    expect(await first.json()).toMatchObject({
+      events: [{ id: "event_9", deliveryId: "numeric-match-9" }],
+      cursor: "cursor_10",
+      hasMore: true,
+    });
+
+    const second = await readHistory(
+      access,
+      "?after=cursor_10&repository=owner%2Frepository&type=issues&limit=1",
+    );
+    expect(await second.json()).toMatchObject({
+      events: [{ id: "event_11", deliveryId: "numeric-match-11" }],
+      cursor: "cursor_12",
+      hasMore: false,
+    });
+  });
+
   it("advances an empty filtered page to the end of history", async () => {
     await send("issues", "excluded-1", payload({ action: "opened" }));
     await send("issues", "excluded-2", payload({ action: "opened" }));
@@ -882,7 +925,7 @@ async function readRows(): Promise<ReadonlyArray<StoredRow>> {
       `SELECT CAST(position AS TEXT) AS position,
               delivery_id, event_type, payload
        FROM events
-       ORDER BY position`,
+       ORDER BY events.position`,
     ).toArray(),
   );
 }
