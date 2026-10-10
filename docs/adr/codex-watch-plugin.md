@@ -62,8 +62,8 @@ codex plugin add gh-watch@github-webhook-relay
 codex
 ```
 
-The user then asks the session to use `$gh-watch` with a consumer and filters.
-The same marketplace command accepts `lucasavila00/github-webhook-relay` for a
+The user asks the session to use `$gh-watch` with a consumer and filters. The
+marketplace command accepts `lucasavila00/github-webhook-relay` for a
 Git-backed installation after the implementation is on the selected ref.
 
 Tests start the compiled stdio server as a real child process and use an MCP
