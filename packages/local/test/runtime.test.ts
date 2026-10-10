@@ -1,4 +1,4 @@
-import { Parsers } from "@github-webhook-relay/contracts";
+import { Parsers } from "@github-webhook-relay/core";
 import { describe, expect, it } from "vitest";
 
 describe("local runtime", () => {
