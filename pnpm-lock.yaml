@@ -191,16 +191,28 @@ importers:
 
   packages/local:
     dependencies:
+      '@beff/client':
+        specifier: 0.0.152
+        version: 0.0.152(zod@3.25.76)
       '@beff/diy':
         specifier: 0.0.33
         version: 0.0.33
       '@github-webhook-relay/contracts':
         specifier: workspace:*
         version: link:../contracts
+      ws:
+        specifier: 8.18.3
+        version: 8.18.3
     devDependencies:
+      '@beff/cli':
+        specifier: 0.0.152
+        version: 0.0.152
       '@types/node':
         specifier: 24.10.0
         version: 24.10.0
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -792,6 +804,9 @@ packages:
   '@types/node@24.10.0':
     resolution: {integrity: sha512-qzQZRBqkFsYyaSWXuEHc2WR9c0a0CXwiE5FWUvn7ZM+vdy1uZLfCunD38UzhuB7YN/J11ndbDBcTmOdxJo9Q7A==}
 
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260524.1':
     resolution: {integrity: sha512-dIaYmijy9/tdrxHTxlnfwzP+AC6iAycUYGChOowLR3bVSbKhz4DUJZGMaodzGCtBEWSRUwx0MK1Sa1zBpFbM5g==}
     engines: {node: '>=16.20.0'}
@@ -1323,6 +1338,18 @@ packages:
       '@cloudflare/workers-types':
         optional: true
 
+  ws@8.18.3:
+    resolution: {integrity: sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   ws@8.21.0:
     resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
     engines: {node: '>=10.0.0'}
@@ -1680,6 +1707,10 @@ snapshots:
   '@types/node@24.10.0':
     dependencies:
       undici-types: 7.16.0
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 24.10.0
 
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260524.1':
     optional: true
@@ -2138,6 +2169,8 @@ snapshots:
       - '@types/node'
       - bufferutil
       - utf-8-validate
+
+  ws@8.18.3: {}
 
   ws@8.21.0: {}
 
