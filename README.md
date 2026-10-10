@@ -1,7 +1,8 @@
 # GitHub webhook relay
 
-The shared event and transport contract is implemented. See the
-[public API reference](docs/public-api.md) for its complete behavior.
+The shared event and transport contract, authentication boundary, event
+storage, and delivery are implemented. See the
+[public API reference](docs/public-api.md) for the contract behavior.
 
 To run your own relay, follow [Getting started](docs/getting-started.md). See
 [Deployment](docs/deployment.md) for the Cloudflare configuration and deploy
@@ -94,10 +95,12 @@ work. Each consumer keeps its own cursor.
 
 ### Authentication and errors
 
-Event history and subscriptions require Cloudflare Access authentication. The
-Worker verifies the Access JWT signature, issuer, audience, and expiry before
-it forwards a request to the event relay. It accepts an identity principal or
-a service-token principal.
+Event history and subscriptions use Cloudflare Access. The browser signs in
+with a one-time PIN and an exact email policy for Lucas. The local client uses
+a revocable Access service token on HTTP requests and WebSocket upgrades. See
+[Cloudflare Access setup](docs/cloudflare-access.md).
+The Worker verifies the Access JWT signature, issuer, audience, and expiry
+before it forwards a request to the event relay.
 
 HTTP errors use a JSON body with `error.code` and `error.message`. Invalid
 input uses status 400. Application authentication failures use status 401 or

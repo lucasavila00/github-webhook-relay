@@ -119,3 +119,4 @@ function matchesFilters(event: Event, filters: EventFilters): boolean {
     (filters.type == null || event.type === filters.type)
   );
 }
+
