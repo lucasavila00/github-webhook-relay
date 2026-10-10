@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createSocketService } from "../src/adapters.ts";
 import type { LocalCapabilities } from "../src/capabilities.ts";
+import type { SocketService } from "../src/types.ts";
 import {
   acknowledgeEvents,
   createNodeCapabilities,
@@ -153,6 +154,18 @@ describe.sequential("local client with the relay Worker", () => {
       waitMilliseconds: 5_000,
     });
     await acknowledgeEvents(fixture.capabilities, before.acknowledgement);
+    let markConnected: (() => void) | undefined;
+    const connected = new Promise<void>((resolve) => {
+      markConnected = resolve;
+    });
+    const resumed = nextMatchingBatch(fixture.restartClient(() => {
+      markConnected?.();
+    }), {
+      consumer: "reconnect",
+      filters: { repository: "owner/reconnect", type: "issues" },
+      waitMilliseconds: 10_000,
+    });
+    await connected;
     await stopChild(fixture.worker.child);
     const worker = await startWorker(fixture.teamDomain, {
       port: fixture.worker.port,
@@ -169,16 +182,12 @@ describe.sequential("local client with the relay Worker", () => {
       filters: { repository: "owner/reconnect", type: "issues" },
       waitMilliseconds: 5_000,
     });
-    const resumed = await nextMatchingBatch(fixture.restartClient(), {
-      consumer: "reconnect",
-      filters: { repository: "owner/reconnect", type: "issues" },
-      waitMilliseconds: 5_000,
-    });
+    const resumedBatch = await resumed;
 
     expect(retained.events.map((event) => event.deliveryId)).toEqual([
       "before-restart",
     ]);
-    expect(resumed.events.map((event) => event.deliveryId)).toEqual([
+    expect(resumedBatch.events.map((event) => event.deliveryId)).toEqual([
       "after-restart",
     ]);
   }, 30_000);
@@ -205,7 +214,9 @@ type WorkerRuntime = Readonly<{
 
 type WorkerFixture = Readonly<{
   capabilities: ReturnType<typeof createNodeCapabilities>;
-  restartClient: () => ReturnType<typeof createNodeCapabilities>;
+  restartClient: (
+    onConnected?: () => void,
+  ) => ReturnType<typeof createNodeCapabilities>;
   send: (delivery: string, repository: string) => Promise<void>;
   stateDirectory: string;
   teamDomain: string;
@@ -230,14 +241,17 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
     accessClientId: "service-id",
     accessClientSecret: "service-secret",
   };
-  const createClient = (): ReturnType<typeof createNodeCapabilities> => {
+  const createClient = (
+    onConnected?: () => void,
+  ): ReturnType<typeof createNodeCapabilities> => {
     const base = createNodeCapabilities(config);
     if (!withIdentity) return base;
+    const network = observedSocketService(token, onConnected);
     return Capabilities.create<LocalCapabilities>({
       clock: base.clock,
       config: base.config,
       http: base.http,
-      network: createSocketService({ "Cf-Access-Jwt-Assertion": token }),
+      network,
       process: base.process,
       storage: base.storage,
     });
@@ -257,6 +271,21 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
     teamDomain: keyServer.url,
     token,
     worker,
+  };
+}
+
+function observedSocketService(
+  token: string,
+  onConnected?: () => void,
+): SocketService {
+  const service = createSocketService({ "Cf-Access-Jwt-Assertion": token });
+  if (onConnected === undefined) return service;
+  return {
+    connect: async (url, credentials, signal) => {
+      const socket = await service.connect(url, credentials, signal);
+      onConnected();
+      return socket;
+    },
   };
 }
 
