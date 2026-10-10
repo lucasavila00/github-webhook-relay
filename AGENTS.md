@@ -106,3 +106,17 @@ comments under the user's identity on your own initiative.
 
 This rule does not prevent the creation or update of an issue body or pull
 request body when the user requests that issue or pull request.
+
+## 11. Use One Nullish Value
+
+Unless a library or protocol requires a distinction, treat `null`, `undefined`,
+and a missing property as the same absent value.
+
+- Use `null` as the canonical absent value.
+- Let nullable function inputs accept both `null` and `undefined`.
+- Do not use optional application properties. Use a required property with the
+  type `T | null`.
+- Use `value == null` or `value != null` to check for both nullish values.
+- Do not add `value ?? null` only to change one nullish value to another.
+- Do not use a conditional spread to convert `null` or `undefined` to a missing
+  property only to make a TypeScript distinction.
