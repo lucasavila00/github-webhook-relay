@@ -7,6 +7,7 @@ describe("webapp runtime", () => {
     const response = await SELF.fetch("https://webapp.test/");
 
     expect(response.status).toBe(501);
+    expect(Parsers.Cursor.parse("runtime-test")).toBe("runtime-test");
   });
 
   it("validates the shared Access key contract", () => {

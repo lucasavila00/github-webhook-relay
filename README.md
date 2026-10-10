@@ -1,8 +1,8 @@
 # GitHub webhook relay
 
-Draft public contract for review. The authentication boundary is implemented.
-Event storage and delivery are not implemented. Endpoint names and message
-shapes are proposals.
+The shared event and transport contract and the authentication boundary are
+implemented. Event storage and delivery are not implemented. See the
+[public API reference](docs/public-api.md) for the contract behavior.
 
 ## Purpose
 
@@ -10,9 +10,9 @@ Keep a persistent GitHub event history and deliver events to a webapp and a
 local Codex integration. A local client can disconnect and then replay events
 from its last processed position. Reading an event does not delete it.
 
-## Planned components
+## Components
 
-A pnpm monorepo will contain:
+The pnpm workspace contains four packages:
 
 - A Cloudflare Worker and SQLite-backed Durable Object for webhook ingestion,
   persistent event storage, queries, replay, and live subscriptions.
@@ -21,9 +21,9 @@ A pnpm monorepo will contain:
   agent work.
 - Documentation for the public contract, setup, and operation.
 
-Package paths, frameworks, and deployment details will be decided in ADRs.
+Deployment details remain with the packages that own them.
 
-## Draft public API
+## Public API
 
 ### Receive GitHub events
 
@@ -59,9 +59,10 @@ Example response:
 }
 ```
 
-IDs and cursors are opaque strings. The cursor identifies how far the server
-has scanned, including events excluded by filters. Clients use the returned
-cursor for the next page. GitHub payloads retain their original shape.
+IDs and cursors are non-empty opaque strings. The cursor identifies how far
+the server has scanned, including events excluded by filters. Clients use the
+returned cursor for the next page. GitHub payloads retain their original
+shape.
 
 ### Subscribe and resume
 
@@ -78,10 +79,8 @@ cursor for the next page. GitHub payloads retain their original shape.
 The server replays matching events after the cursor, then sends live events
 on the same connection. Omitting `after` requests stored history first.
 
-```json
-{"type": "event", "event": {"id": "43", "deliveryId": "...", "type": "issues", "repository": "owner/repo", "receivedAt": "...", "payload": {}}}
-{"type": "checkpoint", "cursor": "43"}
-```
+Event and checkpoint message shapes are in the
+[public API reference](docs/public-api.md#event-stream).
 
 A checkpoint follows the events it covers. Clients save it after processing
 those events and send it on reconnect. Replay and live delivery must have no
@@ -95,10 +94,10 @@ with a one-time PIN and an exact email policy for Lucas. The local client uses
 a revocable Access service token on HTTP requests and WebSocket upgrades. See
 [Cloudflare Access setup](docs/cloudflare-access.md).
 
-HTTP errors use a JSON body with `error.code` and `error.message`. Exact
-status codes, stream errors, page limits, and slow-client behavior belong in
-the API ADR. WebSocket credentials must work for both browser and local
-clients.
+HTTP errors use a JSON body with `error.code` and `error.message`. Invalid
+input uses status 400. Application authentication failures use status 401 or
+403. Unexpected failures use status 500. WebSocket credentials must work for
+both browser and local clients.
 
 ## Local Codex integration
 

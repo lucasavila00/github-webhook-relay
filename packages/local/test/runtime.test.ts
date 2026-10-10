@@ -15,4 +15,8 @@ describe("local runtime", () => {
       Parsers.AccessJwtPayload.safeParse({ ...payload, exp: "invalid" }).success,
     ).toBe(false);
   });
+
+  it("loads the generated shared event contract", () => {
+    expect(Parsers.Cursor.parse("runtime-test")).toBe("runtime-test");
+  });
 });

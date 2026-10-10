@@ -1,5 +1,6 @@
 import { env, SELF } from "cloudflare:test";
 import { Capabilities } from "@beff/diy";
+import { Parsers } from "@github-webhook-relay/contracts";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -268,5 +269,6 @@ describe("relay Access boundary", () => {
     const id = env.EVENT_RELAY.idFromName("runtime-test");
     const response = await env.EVENT_RELAY.get(id).fetch("https://relay.example.com/");
     expect(response.status).toBe(501);
+    expect(Parsers.Cursor.parse("runtime-test")).toBe("runtime-test");
   });
 });
