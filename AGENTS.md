@@ -106,16 +106,3 @@ comments under the user's identity on your own initiative.
 
 This rule does not prevent the creation or update of an issue body or pull
 request body when the user requests that issue or pull request.
-
-## 11. Lower Valid TGo Before You Restrict It
-
-Read the [compiler lowering guide](docs/contrib/compiler-lowering.md) before
-you change compiler lowering or add a source restriction.
-
-Preserve valid TGo semantics, evaluation order, scope, control flow, and error
-identity first. Generate fresh locals and blocks when the lowering needs them.
-Improve generated-code appearance after correctness is complete.
-
-Reject only invalid or unrepresentable programs. Do not replace a feasible
-compiler lowering with a linter restriction. Do not require users to write
-compiler bookkeeping by hand.
