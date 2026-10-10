@@ -1,9 +1,13 @@
 # GitHub webhook ingestion
 
-The relay receives `POST /webhooks/github` in one deployment-wide SQLite
-Durable Object. Configure `WEBHOOK_SECRET` as a Wrangler secret. The object
+The ingress Worker receives `POST /webhooks/github` on its public custom
+hostname. It returns 404 for all other methods and paths. It forwards the
+request through an external Durable Object binding to the `EventRelay` object
+in the relay Worker. The relay Worker does not accept webhook requests.
+
+Configure `WEBHOOK_SECRET` as a secret on the relay Worker. The Durable Object
 verifies `X-Hub-Signature-256` with HMAC SHA-256 over the exact request bytes
-before it parses JSON.
+before it parses JSON and stores the delivery in its SQLite database.
 
 The relay stores these GitHub deliveries:
 

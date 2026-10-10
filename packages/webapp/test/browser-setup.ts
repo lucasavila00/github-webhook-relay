@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const relayUrl = "http://localhost:18791";
+const webhookUrl = "http://127.0.0.1:18791";
 const accessUrl = "http://127.0.0.1:18792";
 
 export default async function setup(): Promise<() => Promise<void>> {
@@ -37,7 +38,7 @@ export default async function setup(): Promise<() => Promise<void>> {
 
   const token = await accessToken(keys.privateKey);
   process.env.RELAY_BROWSER_URL = relayUrl;
-  process.env.RELAY_DIRECT_URL = relayUrl;
+  process.env.RELAY_DIRECT_URL = webhookUrl;
   process.env.RELAY_BROWSER_TOKEN = token;
   const persistence = await mkdtemp(join(tmpdir(), "relay-browser-"));
   const relay = startRelay(persistence);
