@@ -1,5 +1,9 @@
 import { Capabilities } from "@beff/diy/capabilities";
 import { DurableObject } from "cloudflare:workers";
+import {
+  serveBrowserAsset,
+  type AssetCapability,
+} from "@github-webhook-relay/webapp/server";
 
 import {
   authenticateAccessRequest,
@@ -43,6 +47,8 @@ type AccessCapability =
   | CryptoCapability
   | AccessKeyStoreCapability
   | HttpCapability;
+
+type EntryCapability = AccessCapability | AssetCapability;
 
 type RelayConfiguration = Readonly<{
   accessAudience: string;
@@ -217,7 +223,7 @@ export function createEventStore(storage: DurableObjectStorage): EventStore {
 export default {
   async fetch(request: Request, env: RelayEnv): Promise<Response> {
     return handleRelayRequest(
-      createAccessCapabilities(),
+      createEntryCapabilities(env.ASSETS),
       {
         accessAudience: env.ACCESS_AUD,
         accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
@@ -230,7 +236,7 @@ export default {
 } satisfies ExportedHandler<RelayEnv>;
 
 export async function handleRelayRequest(
-  capabilities: Capabilities<AccessCapability>,
+  capabilities: Capabilities<EntryCapability>,
   configuration: RelayConfiguration,
   eventRelay: DurableObjectNamespace<EventRelay>,
   request: Request,
@@ -274,11 +280,14 @@ export async function handleRelayRequest(
       );
     }
   }
-  return eventRelay.get(eventRelay.idFromName(objectName)).fetch(request);
+  if (url.pathname.startsWith("/api/") || url.pathname === "/webhooks/github") {
+    return eventRelay.get(eventRelay.idFromName(objectName)).fetch(request);
+  }
+  return serveBrowserAsset(capabilities, request);
 }
 
-function createAccessCapabilities(): Capabilities<AccessCapability> {
-  return Capabilities.create<AccessCapability>({
+function createEntryCapabilities(assets: Fetcher): Capabilities<EntryCapability> {
+  return Capabilities.create<EntryCapability>({
     clock: { now: Date.now },
     crypto: {
       importKey: crypto.subtle.importKey.bind(crypto.subtle),
@@ -299,5 +308,6 @@ function createAccessCapabilities(): Capabilities<AccessCapability> {
       },
     },
     http: { fetch: globalThis.fetch.bind(globalThis) },
+    assets: { fetch: assets.fetch.bind(assets) },
   });
 }

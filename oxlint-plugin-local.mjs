@@ -24,8 +24,11 @@ const noIncompleteNullishTypes = {
     };
     return {
       Identifier: checkOptional,
+      ArrayPattern: checkOptional,
+      ObjectPattern: checkOptional,
       PropertyDefinition: checkOptional,
       TSMethodSignature: checkOptional,
+      TSMappedType: checkOptional,
       TSNamedTupleMember: checkOptional,
       TSOptionalType(node) {
         context.report({ node, messageId: "optional" });

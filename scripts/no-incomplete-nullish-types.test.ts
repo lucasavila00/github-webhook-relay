@@ -43,9 +43,15 @@ describe("nullish type rules", () => {
     "type T = undefined;",
     "type T = { value?: string | null | undefined };",
     "function read(value?: string | null | undefined) { return value; }",
+    "function read({ value }?: { value: string }) { return value; }",
     "type T = { read?(): void };",
     "type T = [value?: string | null | undefined];",
     "type T = [(string | null | undefined)?];",
+    "type T<K extends string> = { [P in K]?: string | null | undefined };",
+    "declare const value: string | null | undefined; value === null;",
+    "declare const value: string | null | undefined; value !== undefined;",
+    "declare const value: string | null | undefined; value ?? null;",
+    "declare const value: string | null | undefined; value ?? undefined;",
   ];
 
   for (const source of invalid) {
@@ -58,6 +64,9 @@ describe("nullish type rules", () => {
     "function read(value: string | null | undefined) { return value; }",
     "type T = { read: (() => void) | null | undefined };",
     "type T = [value: string | null | undefined];",
+    "type T<K> = ReadonlyArray<K | null | undefined>;",
+    "declare const value: string | null | undefined; value == null;",
+    "declare const value: string | null | undefined; value != null;",
   ];
 
   for (const source of valid) {
