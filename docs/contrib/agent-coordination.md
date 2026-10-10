@@ -13,7 +13,7 @@ agents. Move the requested work to review without unnecessary waiting.
 - The runtime has four total agent slots. The root agent uses one slot, so
   three subagent slots are available.
 - Use slots in short cycles. One subagent implements one issue, runs focused
-  checks, pushes a complete draft pull request, reports its exact head commit,
+  checks, pushes a complete draft pull request, reports its commit,
   and then stops.
 - The root agent tracks hosted CI and review without keeping the implementation
   subagent active. Immediately use the free slot for the highest-priority
@@ -29,13 +29,12 @@ agents. Move the requested work to review without unnecessary waiting.
   This repository squash-merges pull requests. Merge `main` only when GitHub
   reports a conflict, and preserve both sides of the conflict.
 - Do not use a GitLab-style merge train that repeatedly merges the latest
-  `main` into every open pull request. Review and test each clean pull request
-  at its exact head. Run the full tests again on the combined `main` branch
+  `main` into every open pull request. Review each clean pull request and use hosted CI for validation. Run the full tests again on the combined `main` branch
   before publishing.
 - Keep a pull request in draft while implementation, conflict resolution,
   review, or required CI is incomplete.
-- Mark a pull request ready as soon as its requested scope is complete, its
-  exact head has an independent review with no blocker, GitHub reports no
+- Mark a pull request ready as soon as its requested scope is complete, it
+  has an independent review with no blocker, GitHub reports no
   conflict, and all required hosted checks pass.
 - Rebuild the work inventory after a merge or a new issue changes priorities.
   Do not repeat the inventory while the external state is unchanged.
