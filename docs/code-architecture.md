@@ -75,7 +75,12 @@ uses, including capabilities required by calls it forwards to.
 Capability services are read-only records of functions. Construct capability
 bags at runtime entry points with `Capabilities.create`, then pass them
 explicitly. Providers connect platform bindings to free adapter functions.
-Do not obtain services through hidden globals or inject business objects.
+Inject the HTTP client (`globalThis.fetch`), clock, storage, and process
+operations through DIY. Bind the real global fetch at the entry point;
+functions that make HTTP calls receive an HTTP capability. Read the clock
+through a clock capability instead of calling `Date.now()` inside application
+functions. Do not obtain services through hidden globals or inject business
+objects.
 
 ```ts
 import type { Capability, Capabilities } from "@beff/diy/capabilities";
@@ -130,7 +135,20 @@ handwritten environment definition. Use the standard Cloudflare runtime
 for Worker and Durable Object development. Keep Node-only code in the local
 integration. Do not build a custom replacement for Wrangler.
 
-## Tests without mocks
+## Vitest tests without mocks
+
+Use Vitest for tests across the workspace. For Worker and Durable Object
+tests, use the official
+[Cloudflare Vitest integration](https://developers.cloudflare.com/workers/testing/vitest-integration/)
+to run code in the local Workers runtime with configured bindings.
+
+Build test capability bags with DIY, using real dependencies for that test
+environment. Inject its real `globalThis.fetch` as the HTTP client, its real
+clock, and adapters for isolated storage. Test code passes these bags through
+the same function signatures as production code. Do not patch globals or
+replace providers with canned responses. Use a real local HTTP endpoint when
+a test needs controlled HTTP behavior. Pass fixed timestamps as input data
+when testing a pure time-dependent decision.
 
 Test pure functions with immutable inputs and assertions on returned values.
 Test effectful code with its real adapters and real resources. Do not use
