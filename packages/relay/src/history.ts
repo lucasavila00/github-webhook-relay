@@ -189,7 +189,7 @@ function selectRows(
             payload
      FROM events
      WHERE position > ?${repositoryClause}${typeClause}
-     ORDER BY position
+     ORDER BY events.position
      LIMIT ?`,
     ...parameters,
   ).toArray();
