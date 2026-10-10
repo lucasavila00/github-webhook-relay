@@ -130,7 +130,7 @@ Keep Cloudflare bindings, compatibility settings, and Durable Object
 migrations in Wrangler configuration. Use package-local Wrangler commands
 through pnpm: `wrangler dev` for local execution, `wrangler types` for binding
 types, and `wrangler deploy` for deployment. See the
-[Wrangler commands](https://developers.cloudflare.com/workers/wrangler/commands/).
+[Wrangler](https://developers.cloudflare.com/workers/wrangler/).
 
 Generate binding types from configuration instead of maintaining a parallel
 handwritten environment definition. Use the standard Cloudflare runtime
@@ -140,8 +140,8 @@ integration. Do not build a custom replacement for Wrangler.
 ## Vitest tests without mocks
 
 Use Vitest for tests across the workspace. For Worker and Durable Object
-tests, use the official
-[Cloudflare Vitest integration](https://developers.cloudflare.com/workers/testing/vitest-integration/)
+tests, use the official Cloudflare
+[guide](https://developers.cloudflare.com/workers/testing/vitest-integration)
 to run code in the local Workers runtime with configured bindings.
 
 Build test capability bags with DIY, using real dependencies for that test

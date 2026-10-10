@@ -1,0 +1,67 @@
+name: Docs
+
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+      - ".github/workflows/docs.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check Markdown
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          status=0
+          mapfile -t files < <(
+            git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA" -- '*.md'
+          )
+
+          if ((${#files[@]} == 0)); then
+            exit 0
+          fi
+
+          if git grep -nE '[[:blank:]]+$' -- "${files[@]}"; then
+            echo "Markdown files contain trailing whitespace."
+            status=1
+          fi
+
+          for file in "${files[@]}"; do
+            case "$file" in
+              coordinator.md|AGENTS.md|*/AGENTS.md) ;;
+              *)
+                if awk '
+                  /^[[:space:]]*(```|~~~)/ { code = !code; next }
+                  code || /^    / || /^[[:space:]]*\|/ { next }
+                  /^[[:space:]]*([-*+] |[0-9]+[.] )?<?https?:\/\// { next }
+                  length > 80 { print FNR ":" $0; found=1 }
+                  END { exit found }
+                ' "$file"; then
+                  :
+                else
+                  echo "$file contains prose lines longer than 80 characters."
+                  status=1
+                fi
+                ;;
+            esac
+
+            while IFS= read -r link; do
+              case "$link" in
+                ""|\#*|http://*|https://*|mailto:*) continue ;;
+              esac
+              target="${link%%#*}"
+              if [[ ! -e "$(dirname "$file")/$target" ]]; then
+                echo "$file has a missing local link: $link"
+                status=1
+              fi
+            done < <(grep -oE '\]\([^)]+' "$file" | sed 's/^](//' || true)
+          done
+
+          exit "$status"
