@@ -3,6 +3,10 @@
 The shared event and transport contract is implemented. See the
 [public API reference](docs/public-api.md) for its complete behavior.
 
+To run your own relay, follow [Getting started](docs/getting-started.md). See
+[Deployment](docs/deployment.md) for the Cloudflare configuration and deploy
+commands.
+
 ## Purpose
 
 Keep a persistent GitHub event history and deliver events to a webapp and a
