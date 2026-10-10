@@ -1,9 +1,11 @@
 # Deployment
 
-This deployment uses one Cloudflare Worker, one existing `EVENT_RELAY` Durable
-Object binding, and two Worker custom domains in the same Cloudflare zone. The
-webhook hostname is public. One hostname-scoped Cloudflare Access application
-protects the relay hostname.
+This deployment uses two Cloudflare Workers and two custom domains in the same
+Cloudflare zone. The existing `github-webhook-relay` Worker owns the
+`EVENT_RELAY` Durable Object, event history, and webapp. The small
+`github-webhook-relay-ingress` Worker sends public webhook requests to that
+same object. One hostname-scoped Cloudflare Access application protects the
+relay hostname.
 
 ## Prerequisites
 
@@ -22,13 +24,13 @@ pnpm install --frozen-lockfile
 pnpm --filter @github-webhook-relay/relay exec wrangler login
 ```
 
-## 1. Choose the hostnames
+## 1. Choose the custom domains
 
 Choose two unused subdomains in the same Cloudflare zone. This guide uses:
 
 ```text
-WEBHOOK_HOSTNAME=hooks.example.com
-RELAY_HOSTNAME=relay.example.com
+hooks.example.com
+relay.example.com
 ```
 
 Use your real zone in all following values. Do not add a DNS record yourself.
@@ -51,7 +53,7 @@ public hostname with these values:
 | Field | Value |
 | --- | --- |
 | Application name | `github-webhook-relay` |
-| Subdomain | The subdomain from `RELAY_HOSTNAME`, such as `relay` |
+| Subdomain | The read subdomain, such as `relay` |
 | Domain | Your Cloudflare zone, such as `example.com` |
 | Path | Leave empty |
 
@@ -59,7 +61,7 @@ Add an **Allow** policy. Under **Include**, select **Emails** and enter the
 email address `lucaxx@gmail.com`. Select **One-time PIN** as the login method
 for the application. Save the application.
 
-Do not add `WEBHOOK_HOSTNAME` to this application. Do not create an Access
+Do not add the webhook hostname to this application. Do not create an Access
 application for that hostname, a path bypass, an ingress application, or
 Worker-level Access. Hostname-scoped Access supports the relay WebSocket and
 does not cover the public webhook hostname.
@@ -89,30 +91,51 @@ different Access decisions.
 
 ## 3. Configure Wrangler
 
-Edit `packages/relay/wrangler.jsonc`. Set the two custom-domain patterns and
-the non-secret variables to the real values from the prior steps:
+Edit `packages/relay/wrangler.jsonc`. Set its custom domain and non-secret
+variables to the real values from the prior steps:
 
 ```jsonc
 {
   "workers_dev": false,
   "preview_urls": false,
   "routes": [
-    { "pattern": "hooks.example.com", "custom_domain": true },
     { "pattern": "relay.example.com", "custom_domain": true }
   ],
   "vars": {
     "ACCESS_AUD": "your-application-audience-tag",
-    "ACCESS_TEAM_DOMAIN": "https://your-team.cloudflareaccess.com",
-    "WEBHOOK_HOSTNAME": "hooks.example.com",
-    "RELAY_HOSTNAME": "relay.example.com"
+    "ACCESS_TEAM_DOMAIN": "https://your-team.cloudflareaccess.com"
   }
 }
 ```
 
-Replace every example value before deployment. Keep the existing
-`durable_objects` binding named `EVENT_RELAY` and the existing `v1` SQLite
-migration. Changing or recreating that namespace can disconnect the deployment
-from its stored event history.
+Edit `packages/relay/wrangler.ingress.jsonc` and set its custom domain to the
+real webhook hostname:
+
+```jsonc
+{
+  "name": "github-webhook-relay-ingress",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "hooks.example.com", "custom_domain": true }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "EVENT_RELAY",
+        "class_name": "EventRelay",
+        "script_name": "github-webhook-relay"
+      }
+    ]
+  }
+}
+```
+
+Replace every example value before deployment. In the owner configuration,
+keep the existing `EVENT_RELAY` binding and `v1` SQLite migration. In the
+ingress configuration, keep `script_name` set to `github-webhook-relay`. These
+settings connect both Workers to the existing Durable Object namespace and its
+stored event history.
 
 Create a high-entropy GitHub webhook secret. Set it as a Wrangler secret and
 enter the same value when you create the GitHub webhook:
@@ -126,21 +149,25 @@ Wrangler prompts for the secret value. Do not put this value in
 
 ## 4. Deploy
 
-Build the webapp assets, then deploy the Worker from the repository root:
+Build the webapp assets. Deploy the owner Worker first, then deploy the ingress
+Worker from the repository root:
 
 ```sh
 pnpm --filter @github-webhook-relay/webapp build
 pnpm --filter @github-webhook-relay/relay exec wrangler deploy
+pnpm --filter @github-webhook-relay/relay exec wrangler deploy --config wrangler.ingress.jsonc
 ```
 
-The first deployment creates both custom-domain DNS records and attaches them
-to the same Worker. In **Workers & Pages**, open `github-webhook-relay`, then
-open **Settings**, **Domains & Routes**. Confirm that both custom domains are
-active and that `workers.dev` and preview URLs are disabled.
+The owner must exist before Wrangler can bind the ingress Worker to its Durable
+Object. Each deployment creates its custom-domain DNS record. In **Workers &
+Pages**, open each Worker, then open **Settings**, **Domains & Routes**. Confirm
+that each Worker has its expected custom domain and that `workers.dev` and
+preview URLs are disabled.
 
-The checked-in Worker name, `EVENT_RELAY` binding, and `v1` migration preserve
-the Durable Object namespace across deployments. Use the same Cloudflare
-account and Worker name for later deployments.
+The checked-in owner Worker name, `EVENT_RELAY` binding, external
+`script_name`, and `v1` migration preserve the Durable Object namespace across
+deployments. Use the same Cloudflare account and Worker names for later
+deployments.
 
 ## 5. Validate the deployment boundary
 
@@ -166,6 +193,7 @@ validation is pending. Source checks and hosted CI do not replace this proof.
 
 - [Cloudflare Worker custom domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
 - [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)
+- [Wrangler Durable Object bindings](https://developers.cloudflare.com/workers/wrangler/configuration/#durable-objects)
 - [Cloudflare Access for a specific Worker hostname](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)
 - [Cloudflare self-hosted applications](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/)
 - [Cloudflare Access service tokens](https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/)
