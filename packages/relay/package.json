@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "wrangler types && beff -p beff.json",
+    "generate": "pnpm --filter @github-webhook-relay/webapp build && wrangler types && beff -p beff.json",
     "check": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
     "@beff/client": "0.0.152",
     "@beff/diy": "0.0.33",
-    "@github-webhook-relay/contracts": "workspace:*"
+    "@github-webhook-relay/contracts": "workspace:*",
+    "@github-webhook-relay/webapp": "workspace:*"
   },
   "devDependencies": {
     "@beff/cli": "0.0.152",

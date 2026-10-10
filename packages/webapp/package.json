@@ -3,19 +3,25 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./server": "./src/server.ts"
+  },
   "scripts": {
-    "generate": "wrangler types",
+    "build": "vite build",
     "check": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@beff/diy": "0.0.33",
-    "@github-webhook-relay/contracts": "workspace:*"
+    "@github-webhook-relay/contracts": "workspace:*",
+    "preact": "11.0.1"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "1.4.0",
+    "@preact/preset-vite": "2.10.6",
+    "@vitest/browser-playwright": "4.1.0",
+    "playwright": "1.56.1",
     "typescript": "7.0.2",
-    "vitest": "4.1.0",
-    "wrangler": "4.149.0"
+    "vite": "8.3.4",
+    "vitest": "4.1.0"
   }
 }

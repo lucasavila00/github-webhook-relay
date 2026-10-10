@@ -11,6 +11,7 @@ import {
   type ErrorCode,
 } from "@github-webhook-relay/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import type { AssetCapability } from "@github-webhook-relay/webapp/server";
 
 import {
   createEventStore,
@@ -40,6 +41,7 @@ const accessCapabilities = Capabilities.create<
   | CryptoCapability
   | AccessKeyStoreCapability
   | HttpCapability
+  | AssetCapability
 >({
   clock: { now: Date.now },
   crypto: {
@@ -59,6 +61,7 @@ const accessCapabilities = Capabilities.create<
       ),
   },
   http: { fetch: globalThis.fetch.bind(globalThis) },
+  assets: { fetch: env.ASSETS.fetch.bind(env.ASSETS) },
 });
 
 describe.sequential("GitHub webhook ingestion", () => {
@@ -445,6 +448,34 @@ describe.sequential("authenticated event history", () => {
         message: "Internal server error.",
       },
     });
+  });
+});
+
+describe.sequential("authenticated browser assets", () => {
+  afterEach(async () => {
+    await reset();
+  });
+
+  it("protects and serves the built browser from the relay Worker", async () => {
+    const rejected = await SELF.fetch("https://relay.test/");
+    await expectError(rejected, 401, "unauthorized");
+
+    const access = await createAccessSession();
+    const response = await handleRelayRequest(
+      accessCapabilities,
+      {
+        accessAudience: env.ACCESS_AUD,
+        accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
+        relayHostname: env.RELAY_HOSTNAME,
+      },
+      env.EVENT_RELAY,
+      new Request("https://relay.test/", {
+        headers: { "Cf-Access-Jwt-Assertion": access.token },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(await response.text()).toContain("<title>GitHub event history</title>");
   });
 });
 
