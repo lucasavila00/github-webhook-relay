@@ -71,7 +71,7 @@ function startRelay(persistence: string): ChildProcess {
 
 async function waitForRelay(relay: ChildProcess): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (relay.exitCode !== null) throw new Error("The test relay stopped.");
+    if (relay.exitCode != null) throw new Error("The test relay stopped.");
     try {
       const response = await fetch(relayUrl);
       if (response.status === 401) return;
@@ -117,7 +117,7 @@ function listen(server: Server, port: number): Promise<void> {
   return new Promise((resolve) => server.listen(port, "127.0.0.1", resolve));
 }
 
-function required(value: string | undefined): string {
-  if (value === undefined) throw new Error("The RSA key is incomplete.");
+function required(value: string | null | undefined): string {
+  if (value == null) throw new Error("The RSA key is incomplete.");
   return value;
 }

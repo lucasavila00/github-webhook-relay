@@ -16,7 +16,7 @@ afterEach(async () => {
   while (clients.length > 0) await clients.pop()?.close();
   while (directories.length > 0) {
     const directory = directories.pop();
-    if (directory !== undefined) {
+    if (directory != null) {
       await rm(directory, { recursive: true, force: true });
     }
   }

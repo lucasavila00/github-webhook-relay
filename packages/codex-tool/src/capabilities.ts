@@ -6,7 +6,7 @@ import type {
 } from "@github-webhook-relay/local";
 
 export type Environment = Readonly<{
-  read: (name: string) => string | undefined;
+  read: (name: string) => string | null | undefined;
 }>;
 
 export type LocalClient = Readonly<{

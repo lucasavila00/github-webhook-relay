@@ -63,7 +63,7 @@ export async function acknowledgeEvents(
   );
   await capabilities.process.withFileLock(`${statePath}.lock`, async () => {
     const state = await loadStateByKey(capabilities, statePath, parsed.key);
-    if (state === undefined) {
+    if (state == null) {
       throw localError(
         "stale_acknowledgement",
         "Acknowledgement is stale or unknown.",
@@ -79,6 +79,7 @@ export async function acknowledgeEvents(
     await saveState(capabilities, statePath, {
       ...rest,
       acknowledged: state.pending.checkpoint,
+      pending: undefined,
     });
   });
 }
@@ -88,7 +89,7 @@ async function watchLocked(
     ClockCapability | ConfigCapability | NetworkCapability | StorageCapability
   >,
   request: Required<Omit<WatchRequest, "signal">> &
-    Readonly<{ signal?: AbortSignal }>,
+    Readonly<{ signal: AbortSignal | null | undefined }>,
   key: string,
   statePath: string,
   state: ConsumerState,
@@ -112,15 +113,11 @@ async function watchLocked(
         version: 1,
         consumer: request.consumer,
         filters: request.filters,
-        ...(state.acknowledged === undefined
-          ? {}
-          : { acknowledged: state.acknowledged }),
+        acknowledged: state.acknowledged,
         generation,
         pending: {
           token,
-          ...(state.acknowledged === undefined
-            ? {}
-            : { base: state.acknowledged }),
+          base: state.acknowledged,
           checkpoint: result.checkpoint,
         },
       });
@@ -171,10 +168,8 @@ async function receiveBatch(
   try {
     socket.send({
       type: "subscribe",
-      ...(state.acknowledged === undefined ? {} : { after: state.acknowledged }),
-      ...(Object.keys(request.filters).length === 0
-        ? {}
-        : { filters: request.filters }),
+      after: state.acknowledged,
+      filters: request.filters,
     });
     let events: ReadonlyArray<Event> = [];
     while (true) {
@@ -204,7 +199,7 @@ async function receiveBatch(
 
 function normalizeRequest(
   request: WatchRequest,
-): Required<Omit<WatchRequest, "signal">> & Readonly<{ signal?: AbortSignal }> {
+): Required<Omit<WatchRequest, "signal">> & Readonly<{ signal: AbortSignal | null | undefined }> {
   const filterResult = Parsers.EventFilters.safeParse(request.filters);
   if (
     request.consumer.length === 0 ||
@@ -218,22 +213,20 @@ function normalizeRequest(
     consumer: request.consumer,
     filters: canonicalFilters(filterResult.data),
     waitMilliseconds: request.waitMilliseconds,
-    ...(request.signal === undefined ? {} : { signal: request.signal }),
+    signal: request.signal,
   };
 }
 
 function canonicalFilters(filters: EventFilters): EventFilters {
   return {
-    ...(filters.repository === undefined
-      ? {}
-      : { repository: filters.repository }),
-    ...(filters.type === undefined ? {} : { type: filters.type }),
+    repository: filters.repository,
+    type: filters.type,
   };
 }
 
 function stateKey(consumer: string, filters: EventFilters): string {
   return createHash("sha256")
-    .update(JSON.stringify([consumer, filters.repository ?? null, filters.type ?? null]))
+    .update(JSON.stringify([consumer, filters.repository, filters.type]))
     .digest("hex");
 }
 
@@ -244,17 +237,19 @@ async function loadState(
   key: string,
 ): Promise<ConsumerState> {
   const state = await loadStateByKey(capabilities, path, key);
-  if (state === undefined) {
+  if (state == null) {
     return {
       version: 1,
       consumer: request.consumer,
       filters: request.filters,
+      acknowledged: undefined,
       generation: 0,
+      pending: undefined,
     };
   }
   if (
     state.consumer !== request.consumer ||
-    JSON.stringify(state.filters) !== JSON.stringify(request.filters)
+    !sameFilters(state.filters, request.filters)
   ) {
     throw localError("storage", "Consumer state does not match its key.");
   }
@@ -265,9 +260,9 @@ async function loadStateByKey(
   capabilities: Capabilities<StorageCapability>,
   path: string,
   key: string,
-): Promise<ConsumerState | undefined> {
+): Promise<ConsumerState | null | undefined> {
   const value = await storageCall(() => capabilities.storage.read(path));
-  if (value === undefined) return undefined;
+  if (value == null) return undefined;
   try {
     const parsed = Parsers.ConsumerState.parse(JSON.parse(value) as unknown);
     if (
@@ -298,7 +293,7 @@ function parseAcknowledgement(
 ): Readonly<{ key: string; token: string }> {
   if (
     typeof acknowledgement !== "object" ||
-    acknowledgement === null ||
+    acknowledgement == null ||
     typeof acknowledgement.value !== "string"
   ) {
     throw localError(
@@ -309,7 +304,7 @@ function parseAcknowledgement(
   const match = /^([a-f0-9]{64})\.(ack_[1-9][0-9]*)$/.exec(
     acknowledgement.value,
   );
-  if (match?.[1] === undefined || match[2] === undefined) {
+  if (match?.[1] == null || match[2] == null) {
     throw localError(
       "stale_acknowledgement",
       "Acknowledgement is stale or unknown.",
@@ -322,11 +317,20 @@ function validState(state: ConsumerState): boolean {
   if (!Number.isSafeInteger(state.generation) || state.generation < 0) {
     return false;
   }
-  if (state.pending === undefined) return true;
+  if (state.pending == null) return true;
   return (
     state.pending.token === `ack_${state.generation}` &&
-    state.pending.base === state.acknowledged
+    sameNullishValue(state.pending.base, state.acknowledged)
   );
+}
+
+function sameFilters(left: EventFilters, right: EventFilters): boolean {
+  return sameNullishValue(left.repository, right.repository) &&
+    sameNullishValue(left.type, right.type);
+}
+
+function sameNullishValue<T>(left: T | null | undefined, right: T | null | undefined): boolean {
+  return left == null ? right == null : left === right;
 }
 
 function streamUrl(relayUrl: string): string {
@@ -338,7 +342,7 @@ function streamUrl(relayUrl: string): string {
 function timedSignal(
   clock: Clock,
   deadline: Deadline,
-  parent?: AbortSignal,
+  parent: AbortSignal | null | undefined,
 ): Readonly<{
   signal: AbortSignal;
   didTimeOut: () => boolean;
@@ -411,6 +415,6 @@ function isLocalError(error: unknown): error is LocalClientError {
   return (
     error instanceof Error &&
     "code" in error &&
-    typeof (error as Readonly<{ code?: unknown }>).code === "string"
+    typeof (error as Readonly<{ code: unknown | null | undefined }>).code === "string"
   );
 }

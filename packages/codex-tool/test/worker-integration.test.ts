@@ -52,7 +52,7 @@ describe("MCP tools with the relay Worker", () => {
       const stateDirectory = await temporaryDirectory("gh-watch-codex-state-");
       const codexHome = await temporaryDirectory("gh-watch-codex-home-");
       const authFile = process.env.CODEX_AUTH_FILE;
-      if (authFile === undefined) throw new Error("CODEX_AUTH_FILE is required.");
+      if (authFile == null) throw new Error("CODEX_AUTH_FILE is required.");
       await symlink(authFile, join(codexHome, "auth.json"));
 
       await execute("codex", [
@@ -135,7 +135,10 @@ describe("MCP tools with the relay Worker", () => {
       expect(stateFiles).toHaveLength(1);
       const state = JSON.parse(
         await readFile(join(stateDirectory, stateFiles[0]!), "utf8"),
-      ) as { acknowledged?: string; pending?: unknown };
+      ) as {
+        acknowledged: string | null | undefined;
+        pending: unknown | null | undefined;
+      };
       expect(state).toMatchObject({ acknowledged: "cursor_1" });
       expect(state.pending).toBeUndefined();
     },
@@ -216,12 +219,11 @@ describe("MCP tools with the relay Worker", () => {
       });
       const content = second.structuredContent;
       if (
-        content === undefined ||
-        content === null ||
+        content == null ||
         typeof content !== "object" ||
         !("acknowledgement" in content) ||
         typeof content.acknowledgement !== "object" ||
-        content.acknowledgement === null
+        content.acknowledgement == null
       ) {
         throw new Error("Watch did not return an acknowledgement.");
       }
@@ -328,7 +330,7 @@ async function startWorker(teamDomain: string): Promise<Readonly<{ port: number 
 async function waitForWorker(child: ChildProcess, port: number): Promise<void> {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
+    if (child.exitCode != null) {
       throw new Error(`Wrangler stopped before startup with status ${child.exitCode}.`);
     }
     try {
@@ -397,7 +399,7 @@ async function createSigningKeys(): Promise<SigningKeys> {
     ["sign", "verify"],
   );
   const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
-  if (jwk.e === undefined || jwk.n === undefined) {
+  if (jwk.e == null || jwk.n == null) {
     throw new Error("Generated key is not RSA.");
   }
   return {
@@ -446,7 +448,7 @@ async function listen(server: HttpServer): Promise<number> {
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
-  if (address === null || typeof address === "string") {
+  if (address == null || typeof address === "string") {
     throw new Error("Server did not bind to TCP.");
   }
   return address.port;
@@ -459,7 +461,7 @@ async function closeServer(server: HttpServer): Promise<void> {
 }
 
 async function stopChild(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (child.exitCode != null || child.signalCode != null) return;
   const closed = once(child, "close");
   child.kill("SIGTERM");
   await closed;

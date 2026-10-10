@@ -93,7 +93,7 @@ async function listen(server: Server): Promise<string> {
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
-  if (address === null || typeof address === "string") {
+  if (address == null || typeof address === "string") {
     throw new Error("Server did not bind to TCP.");
   }
   return `http://127.0.0.1:${address.port}`;

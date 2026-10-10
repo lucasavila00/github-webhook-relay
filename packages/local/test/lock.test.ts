@@ -16,7 +16,7 @@ const execute = promisify(execFile);
 afterEach(async () => {
   while (directories.length > 0) {
     const directory = directories.pop();
-    if (directory !== undefined) {
+    if (directory != null) {
       await rm(directory, { recursive: true, force: true });
     }
   }
@@ -26,8 +26,8 @@ describe("Linux consumer lock", () => {
   it("rejects overlap and releases after the holder completes", async () => {
     const lockPath = await temporaryLockPath();
     const service = createProcessService();
-    let release: (() => void) | undefined;
-    let acquired: (() => void) | undefined;
+    let release: (() => void) | null | undefined;
+    let acquired: (() => void) | null | undefined;
     const ready = new Promise<void>((resolve) => {
       acquired = resolve;
     });

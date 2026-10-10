@@ -8,11 +8,15 @@
   },
   "scripts": {
     "generate": "pnpm -r --if-present generate",
-    "check": "pnpm -r --if-present check && diy-cli -p diy.json",
+    "check": "oxlint --config .oxlintrc.json && pnpm -r --if-present check && diy-cli -p diy.json",
+    "test:nullish-types": "vitest run scripts/no-incomplete-nullish-types.test.ts",
     "test": "pnpm -r --if-present test"
   },
   "devDependencies": {
     "@beff/diy-cli": "0.0.33",
-    "typescript": "7.0.2"
+    "@oxlint/plugins": "1.64.0",
+    "oxlint": "1.61.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.0"
   }
 }

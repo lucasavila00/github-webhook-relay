@@ -56,7 +56,10 @@ export async function callTool(
     const parsed = Parsers.WatchToolInput.safeParse(input);
     if (!parsed.success) return toolError("invalid_request", "Invalid watch input.");
     try {
-      return toolResult(await capabilities.localClient.watch(parsed.data));
+      return toolResult(await capabilities.localClient.watch({
+        ...parsed.data,
+        signal: undefined,
+      }));
     } catch (error) {
       return localToolError(error);
     }

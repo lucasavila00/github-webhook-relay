@@ -1,4 +1,4 @@
-import { Capabilities, type Capability } from "@beff/diy/capabilities";
+import { Capabilities } from "@beff/diy/capabilities";
 import {
   acknowledgeEvents,
   createNodeCapabilities,
@@ -52,7 +52,7 @@ export function createServer(
 }
 
 export async function runServer(
-  environment: Readonly<Record<string, string | undefined>>,
+  environment: Readonly<Record<string, string | null | undefined>>,
 ): Promise<void> {
   const environmentCapabilities = Capabilities.create<EnvironmentCapability>({
     environment: { read: (name) => environment[name] },

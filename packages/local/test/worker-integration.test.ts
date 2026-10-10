@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { once } from "node:events";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer, request as httpRequest, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,8 +31,9 @@ describe.sequential("local client with the relay Worker", () => {
 
     const batch = await watchEvents(fixture.capabilities, {
       consumer: "long-wait",
-      filters: { repository: "owner/long-wait", type: "issues" },
+      filters: { repository: undefined, type: undefined },
       waitMilliseconds: 2_147_483_648,
+      signal: undefined,
     });
 
     expect(batch).toMatchObject({
@@ -43,14 +44,20 @@ describe.sequential("local client with the relay Worker", () => {
     const pending = await readState(fixture.stateDirectory);
     expect(pending).not.toHaveProperty("acknowledged");
     expect(pending).toMatchObject({ pending: { checkpoint: "cursor_1" } });
+    await writeState(fixture.stateDirectory, {
+      ...pending,
+      filters: { repository: null, type: null },
+      pending: { ...(pending.pending as Record<string, unknown>), base: null },
+    });
     await acknowledgeEvents(fixture.capabilities, batch.acknowledgement);
     const acknowledged = await readState(fixture.stateDirectory);
     expect(acknowledged).toMatchObject({ acknowledged: "cursor_1" });
     expect(acknowledged).not.toHaveProperty("pending");
     await expect(watchEvents(fixture.capabilities, {
       consumer: "long-wait",
-      filters: { repository: "owner/long-wait", type: "issues" },
+      filters: { repository: undefined, type: undefined },
       waitMilliseconds: 100,
+      signal: undefined,
     })).resolves.toEqual({ type: "timeout" });
   }, 30_000);
 
@@ -61,10 +68,11 @@ describe.sequential("local client with the relay Worker", () => {
       consumer: "repeat",
       filters: { repository: "owner/repeat", type: "issues" as const },
       waitMilliseconds: 5_000,
+    signal: undefined,
     };
 
     const first = await watchEvents(fixture.capabilities, request);
-    const restarted = fixture.restartClient();
+    const restarted = fixture.restartClient(undefined);
     const second = await watchEvents(restarted, request);
 
     expect(first).toMatchObject({ type: "batch", events: [{ id: "event_1" }] });
@@ -86,6 +94,7 @@ describe.sequential("local client with the relay Worker", () => {
       consumer: "consumer-a",
       filters: { repository: "owner/independent", type: "issues" },
       waitMilliseconds: 5_000,
+    signal: undefined,
     });
     await acknowledgeEvents(fixture.capabilities, firstA.acknowledgement);
     await fixture.send("independent-later", "owner/independent");
@@ -93,17 +102,20 @@ describe.sequential("local client with the relay Worker", () => {
       consumer: "consumer-b",
       filters: { repository: "owner/independent", type: "issues" },
       waitMilliseconds: 5_000,
+    signal: undefined,
     });
     const laterA = await nextMatchingBatch(fixture.capabilities, {
       consumer: "consumer-a",
       filters: { repository: "owner/independent", type: "issues" },
       waitMilliseconds: 5_000,
+    signal: undefined,
     });
     await fixture.send("independent-filter", "owner/other-filter");
     const filteredA = await nextMatchingBatch(fixture.capabilities, {
       consumer: "consumer-a",
       filters: { repository: "owner/other-filter", type: "issues" },
       waitMilliseconds: 5_000,
+    signal: undefined,
     });
 
     expect(firstA.events).toMatchObject([{ deliveryId: "independent-first" }]);
@@ -120,14 +132,16 @@ describe.sequential("local client with the relay Worker", () => {
     const fixture = await workerFixture();
     await expect(watchEvents(fixture.capabilities, {
       consumer: "timeout",
-      filters: {},
+      filters: { repository: undefined, type: undefined },
       waitMilliseconds: 50,
+    signal: undefined,
     })).resolves.toEqual({ type: "timeout" });
     const controller = new AbortController();
     const request = {
       consumer: "cancelled",
-      filters: {},
+      filters: { repository: undefined, type: undefined },
       waitMilliseconds: 5_000,
+    signal: undefined,
     };
     const active = watchEvents(fixture.capabilities, {
       ...request,
@@ -142,6 +156,7 @@ describe.sequential("local client with the relay Worker", () => {
     await expect(watchEvents(fixture.capabilities, {
       ...request,
       waitMilliseconds: 50,
+    signal: undefined,
     })).resolves.toEqual({ type: "timeout" });
   }, 30_000);
 
@@ -152,9 +167,10 @@ describe.sequential("local client with the relay Worker", () => {
       consumer: "reconnect",
       filters: { repository: "owner/reconnect", type: "issues" },
       waitMilliseconds: 5_000,
+    signal: undefined,
     });
     await acknowledgeEvents(fixture.capabilities, before.acknowledgement);
-    let markConnected: (() => void) | undefined;
+    let markConnected: (() => void) | null | undefined;
     const connected = new Promise<void>((resolve) => {
       markConnected = resolve;
     });
@@ -164,6 +180,7 @@ describe.sequential("local client with the relay Worker", () => {
       consumer: "reconnect",
       filters: { repository: "owner/reconnect", type: "issues" },
       waitMilliseconds: 10_000,
+    signal: undefined,
     });
     await connected;
     await stopChild(fixture.worker.child);
@@ -181,6 +198,7 @@ describe.sequential("local client with the relay Worker", () => {
       consumer: "retained-history",
       filters: { repository: "owner/reconnect", type: "issues" },
       waitMilliseconds: 5_000,
+    signal: undefined,
     });
     const resumedBatch = await resumed;
 
@@ -197,8 +215,9 @@ describe.sequential("local client with the relay Worker", () => {
 
     const error = await watchEvents(fixture.capabilities, {
       consumer: "authentication",
-      filters: {},
+      filters: { repository: undefined, type: undefined },
       waitMilliseconds: 2_000,
+    signal: undefined,
     }).catch((reason: unknown) => reason);
 
     expect(error).toMatchObject({ code: "unauthorized" });
@@ -215,7 +234,7 @@ type WorkerRuntime = Readonly<{
 type WorkerFixture = Readonly<{
   capabilities: ReturnType<typeof createNodeCapabilities>;
   restartClient: (
-    onConnected?: () => void,
+    onConnected: (() => void) | null | undefined,
   ) => ReturnType<typeof createNodeCapabilities>;
   send: (delivery: string, repository: string) => Promise<void>;
   stateDirectory: string;
@@ -233,7 +252,7 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
     iss: keyServer.url,
     sub: "local-client-test",
   });
-  const worker = await startWorker(keyServer.url);
+  const worker = await startWorker(keyServer.url, undefined);
   const stateDirectory = await temporaryDirectory("gh-watch-worker-state-");
   const config = {
     relayUrl: `http://127.0.0.1:${worker.port}`,
@@ -242,7 +261,7 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
     accessClientSecret: "service-secret",
   };
   const createClient = (
-    onConnected?: () => void,
+    onConnected: (() => void) | null | undefined,
   ): ReturnType<typeof createNodeCapabilities> => {
     const base = createNodeCapabilities(config);
     if (!withIdentity) return base;
@@ -257,7 +276,7 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
     });
   };
   return {
-    capabilities: createClient(),
+    capabilities: createClient(undefined),
     restartClient: createClient,
     send: async (delivery, repository) => {
       expect(await sendWebhook(
@@ -276,10 +295,10 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
 
 function observedSocketService(
   token: string,
-  onConnected?: () => void,
+  onConnected: (() => void) | null | undefined,
 ): SocketService {
   const service = createSocketService({ "Cf-Access-Jwt-Assertion": token });
-  if (onConnected === undefined) return service;
+  if (onConnected == null) return service;
   return {
     connect: async (url, credentials, signal) => {
       const socket = await service.connect(url, credentials, signal);
@@ -291,7 +310,7 @@ function observedSocketService(
 
 async function startWorker(
   teamDomain: string,
-  existing?: Readonly<{ port: number; persist: string }>,
+  existing: Readonly<{ port: number; persist: string }> | null | undefined,
 ): Promise<WorkerRuntime> {
   const port = existing?.port ?? await unusedPort();
   const persist = existing?.persist ?? await temporaryDirectory("gh-watch-worker-");
@@ -399,7 +418,7 @@ async function createSigningKeys(): Promise<SigningKeys> {
     ["sign", "verify"],
   );
   const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
-  if (jwk.e === undefined || jwk.n === undefined) {
+  if (jwk.e == null || jwk.n == null) {
     throw new Error("Generated key is not RSA.");
   }
   return {
@@ -444,7 +463,7 @@ async function listen(server: Server): Promise<number> {
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
-  if (address === null || typeof address === "string") {
+  if (address == null || typeof address === "string") {
     throw new Error("Server did not bind to TCP.");
   }
   return address.port;
@@ -457,7 +476,7 @@ async function closeServer(server: Server): Promise<void> {
 }
 
 async function stopChild(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (child.exitCode != null || child.signalCode != null) return;
   const closed = once(child, "close");
   child.kill("SIGTERM");
   await closed;
@@ -487,9 +506,18 @@ async function nextMatchingBatch(
 
 async function readState(directory: string): Promise<Record<string, unknown>> {
   const file = (await readdir(directory)).find((name) => name.endsWith(".json"));
-  if (file === undefined) throw new Error("State file was not written.");
+  if (file == null) throw new Error("State file was not written.");
   return JSON.parse(await readFile(join(directory, file), "utf8")) as Record<
     string,
     unknown
   >;
+}
+
+async function writeState(
+  directory: string,
+  state: Record<string, unknown>,
+): Promise<void> {
+  const file = (await readdir(directory)).find((name) => name.endsWith(".json"));
+  if (file == null) throw new Error("State file was not written.");
+  await writeFile(join(directory, file), `${JSON.stringify(state)}\n`);
 }

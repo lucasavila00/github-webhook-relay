@@ -6,8 +6,8 @@ export type AccessJwtHeader = Readonly<{
 }>;
 export type AccessJwtPayload = Readonly<{
   aud: string | ReadonlyArray<string>;
-  common_name?: string;
-  email?: string;
+  common_name: string | null | undefined;
+  email: string | null | undefined;
   exp: number;
   iss: string;
   sub: string;
@@ -41,15 +41,15 @@ export type Event = Readonly<{
   payload: Readonly<Record<string, unknown>>;
 }>;
 export type EventFilters = Readonly<{
-  repository?: string;
-  type?: EventType;
+  repository: string | null | undefined;
+  type: EventType | null | undefined;
 }>;
 export type EventLimit = NumberFormat<"eventLimit">;
 export type EventQuery = Readonly<{
-  after?: Cursor;
-  repository?: string;
-  type?: EventType;
-  limit?: EventLimit;
+  after: Cursor | null | undefined;
+  repository: string | null | undefined;
+  type: EventType | null | undefined;
+  limit: EventLimit | null | undefined;
 }>;
 export type EventPage = Readonly<{
   events: ReadonlyArray<Event>;
@@ -58,8 +58,8 @@ export type EventPage = Readonly<{
 }>;
 export type Subscribe = Readonly<{
   type: "subscribe";
-  after?: Cursor;
-  filters?: EventFilters;
+  after: Cursor | null | undefined;
+  filters: EventFilters | null | undefined;
 }>;
 export type ErrorCode =
   | "invalid_request"
@@ -85,16 +85,16 @@ export type LocalConfig = Readonly<{
 }>;
 export type PendingBatch = Readonly<{
   token: string;
-  base?: Cursor;
+  base: Cursor | null | undefined;
   checkpoint: Cursor;
 }>;
 export type ConsumerState = Readonly<{
   version: 1;
   consumer: string;
   filters: EventFilters;
-  acknowledged?: Cursor;
+  acknowledged: Cursor | null | undefined;
   generation: number;
-  pending?: PendingBatch;
+  pending: PendingBatch | null | undefined;
 }>;
 export type WaitMilliseconds = NumberFormat<"waitMilliseconds">;
 export type WatchToolInput = Readonly<{
@@ -121,10 +121,10 @@ export type GitHubPullRequestSelection = Readonly<{
   pull_request: Readonly<{ merged: boolean }>;
 }>;
 export type RawEventQuery = Readonly<{
-  after?: string;
-  repository?: string;
-  type?: string;
-  limit?: string;
+  after: string | null | undefined;
+  repository: string | null | undefined;
+  type: string | null | undefined;
+  limit: string | null | undefined;
 }>;
 export type StreamAttachmentData = Readonly<{
   bytes: number;

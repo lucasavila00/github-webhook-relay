@@ -147,7 +147,7 @@ async function seedEvent(
   }
 }
 
-function required(value: string | undefined): string {
-  if (value === undefined) throw new Error("The browser test is not configured.");
+function required(value: string | null | undefined): string {
+  if (value == null) throw new Error("The browser test is not configured.");
   return value;
 }
