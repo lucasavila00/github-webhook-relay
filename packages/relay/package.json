@@ -1,0 +1,21 @@
+{
+  "name": "@github-webhook-relay/relay",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "wrangler types",
+    "check": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@beff/diy": "0.0.33",
+    "@github-webhook-relay/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.0",
+    "wrangler": "4.149.0"
+  }
+}
