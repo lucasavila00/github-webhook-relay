@@ -240,7 +240,11 @@ export async function handleRelayRequest(
   request: Request,
 ): Promise<Response> {
   const url = new URL(request.url);
-  if (url.pathname === "/webhooks/github") {
+  const api = request.method === "GET" &&
+    (url.pathname === "/api/events" || url.pathname === "/api/events/stream");
+  const asset = (request.method === "GET" || request.method === "HEAD") &&
+    (url.pathname === "/" || url.pathname.startsWith("/assets/"));
+  if (!api && !asset) {
     return new Response(null, { status: 404 });
   }
   const principal = await authenticateAccessRequest(
@@ -262,7 +266,7 @@ export async function handleRelayRequest(
       { status: 401 },
     );
   }
-  if (url.pathname.startsWith("/api/")) {
+  if (api) {
     return eventRelay.get(eventRelay.idFromName(objectName)).fetch(request);
   }
   return serveBrowserAsset(capabilities, request);

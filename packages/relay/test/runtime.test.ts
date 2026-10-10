@@ -285,14 +285,28 @@ describe.sequential("Worker surface boundaries", () => {
     expect(responses.map(({ status }) => status)).toEqual([404, 404, 404, 404]);
   });
 
-  it("rejects webhooks in the relay Worker", async () => {
+  it("rejects webhook and unknown routes in the relay Worker", async () => {
     const access = await createAccessSession();
     const headers = { "Cf-Access-Jwt-Assertion": access.token };
-    const response = await SELF.fetch("https://relay.test/webhooks/github", {
-      method: "POST",
-      headers,
-    });
-    expect(response.status).toBe(404);
+    const responses = await Promise.all([
+      SELF.fetch("https://relay.test/webhooks/github", {
+        method: "POST",
+        headers,
+      }),
+      SELF.fetch("https://relay.test/api/unknown", { headers }),
+      SELF.fetch("https://relay.test/unknown", { headers }),
+      SELF.fetch("https://relay.test/", { method: "POST", headers }),
+    ]);
+    expect(responses.map(({ status }) => status)).toEqual([404, 404, 404, 404]);
+  });
+
+  it("rejects unknown relay routes before authentication", async () => {
+    const responses = await Promise.all([
+      SELF.fetch("https://relay.test/webhooks/github"),
+      SELF.fetch("https://relay.test/api/unknown"),
+      SELF.fetch("https://relay.test/unknown"),
+    ]);
+    expect(responses.map(({ status }) => status)).toEqual([404, 404, 404]);
   });
 });
 
