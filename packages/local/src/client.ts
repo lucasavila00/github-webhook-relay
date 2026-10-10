@@ -39,7 +39,10 @@ export async function watchEvents(
   await storageCall(() =>
     capabilities.storage.ensureDirectory(capabilities.config.stateDirectory),
   );
-  const deadline = capabilities.clock.now() + normalized.waitMilliseconds;
+  const deadline: Deadline = {
+    startedAt: capabilities.clock.now(),
+    waitMilliseconds: normalized.waitMilliseconds,
+  };
   return await capabilities.process.withFileLock(`${statePath}.lock`, async () => {
     const state = await loadState(capabilities, statePath, normalized, key);
     return await watchLocked(capabilities, normalized, key, statePath, state, deadline);
@@ -89,12 +92,12 @@ async function watchLocked(
   key: string,
   statePath: string,
   state: ConsumerState,
-  deadline: number,
+  deadline: Deadline,
 ): Promise<WatchResult> {
-  while (capabilities.clock.now() < deadline) {
+  while (remainingWait(capabilities.clock, deadline) > 0) {
     const timed = timedSignal(
       capabilities.clock,
-      deadline - capabilities.clock.now(),
+      deadline,
       request.signal,
     );
     try {
@@ -206,7 +209,7 @@ function normalizeRequest(
   if (
     request.consumer.length === 0 ||
     !Number.isFinite(request.waitMilliseconds) ||
-    request.waitMilliseconds < 0 ||
+    request.waitMilliseconds <= 0 ||
     !filterResult.success
   ) {
     throw localError("configuration", "Invalid watch request.");
@@ -334,7 +337,7 @@ function streamUrl(relayUrl: string): string {
 
 function timedSignal(
   clock: Clock,
-  milliseconds: number,
+  deadline: Deadline,
   parent?: AbortSignal,
 ): Readonly<{
   signal: AbortSignal;
@@ -345,10 +348,20 @@ function timedSignal(
   let timeout = false;
   const onAbort = (): void => controller.abort();
   parent?.addEventListener("abort", onAbort, { once: true });
-  const cancelTimer = clock.setTimer(() => {
-    timeout = true;
-    controller.abort();
-  }, Math.max(0, milliseconds));
+  let cancelTimer = (): void => undefined;
+  const schedule = (): void => {
+    const remaining = remainingWait(clock, deadline);
+    if (remaining <= 0) {
+      timeout = true;
+      controller.abort();
+      return;
+    }
+    cancelTimer = clock.setTimer(
+      schedule,
+      Math.min(remaining, 2_147_483_647),
+    );
+  };
+  schedule();
   if (parent?.aborted === true) controller.abort();
   return {
     signal: controller.signal,
@@ -358,6 +371,18 @@ function timedSignal(
       parent?.removeEventListener("abort", onAbort);
     },
   };
+}
+
+type Deadline = Readonly<{
+  startedAt: number;
+  waitMilliseconds: number;
+}>;
+
+function remainingWait(clock: Clock, deadline: Deadline): number {
+  return Math.max(
+    0,
+    deadline.waitMilliseconds - (clock.now() - deadline.startedAt),
+  );
 }
 
 async function waitForRetry(clock: Clock, signal: AbortSignal): Promise<void> {
