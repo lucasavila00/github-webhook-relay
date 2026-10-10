@@ -68,10 +68,10 @@ const capabilities = Capabilities.create<
   | AssetCapability
 >({
   accessKeyStore: {
-    read: async (url: string): Promise<unknown | undefined> => {
+    read: async (url: string): Promise<unknown | null | undefined> => {
       const cache = await caches.open("access-signing-keys");
       const response = await cache.match(url);
-      return response === undefined ? undefined : response.json();
+      return response == null ? undefined : response.json();
     },
     write: async (url: string, value: unknown): Promise<void> => {
       const cache = await caches.open("access-signing-keys");
@@ -128,8 +128,8 @@ const createSigningKeys = async (): Promise<SigningKeys> => {
   const exported = await crypto.subtle.exportKey("jwk", pair.publicKey);
   if (
     exported.kty !== "RSA" ||
-    exported.e === undefined ||
-    exported.n === undefined
+    exported.e == null ||
+    exported.n == null
   ) {
     throw new Error("The generated test key is not an RSA key.");
   }
