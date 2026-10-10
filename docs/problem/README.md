@@ -30,6 +30,8 @@ cause duplicate work.
 The product is for Lucas alone. Shared access and multiple user accounts are
 outside its scope. Cloudflare Access protects browser access, and only Lucas
 can use it. The local tool uses a revocable Cloudflare Access service token.
+The public GitHub webhook hostname is separate from the protected relay
+hostname. It does not serve the browser, history API, or event stream.
 
 The local machine connects outbound. It must not need a public listening port
 or a Cloudflare Tunnel, and it can be offline when GitHub sends a webhook.

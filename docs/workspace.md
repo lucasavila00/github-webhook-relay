@@ -17,11 +17,13 @@ packages can depend on core. Runtime adapter and DIY capability interfaces stay
 with their implementations. Cloudflare bindings stay in the package that
 deploys them.
 
-The relay package owns the only production Wrangler deployment. Its build
-includes the webapp Vite output as static assets. The relay Worker runs first,
-applies Cloudflare Access authentication, routes relay API requests, and gives
-browser requests to the webapp asset server. This keeps the existing Worker
-name, `EventRelay` binding, SQLite migrations, and Durable Object namespace.
+The relay package owns two production Wrangler deployments. The
+`github-webhook-relay` Worker owns the webapp assets, Cloudflare Access checks,
+relay API, and `EventRelay` Durable Object. The
+`github-webhook-relay-ingress` Worker accepts GitHub webhooks and calls the
+existing Durable Object through an external binding. Both deployments disable
+`workers.dev` and preview URLs. This keeps the existing SQLite migration and
+Durable Object namespace in the relay Worker.
 
 ## Development commands
 

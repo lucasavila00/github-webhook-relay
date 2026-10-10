@@ -9,7 +9,6 @@ export default defineConfig({
         bindings: {
           ACCESS_AUD: "test-audience",
           ACCESS_TEAM_DOMAIN: "https://access.test",
-          RELAY_HOSTNAME: "relay.test",
           WEBHOOK_SECRET: "test-secret",
         },
       },

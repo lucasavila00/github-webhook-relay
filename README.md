@@ -5,6 +5,10 @@ updates, and exposes a local Codex watch tool. See the
 [public API reference](docs/public-api.md) and the
 [production operations guide](docs/operations.md).
 
+To run your own relay, follow [Getting started](docs/getting-started.md). See
+[Deployment](docs/deployment.md) for the Cloudflare configuration and deploy
+commands.
+
 ## Purpose
 
 Keep a persistent GitHub event history and deliver events to a webapp and a
@@ -16,15 +20,17 @@ from its last processed position. Reading an event does not delete it.
 The pnpm workspace contains the shared core, relay, webapp, local client,
 Codex tool, and real-resource E2E packages:
 
-- A Cloudflare Worker and SQLite-backed Durable Object for webhook ingestion,
-  persistent event storage, queries, replay, and live subscriptions.
-- A browser app for authorized event browsing.
-- A local Codex integration that consumes events and connects them to local
-  agent work.
+- A core package owns shared data types and validators.
+- A relay package owns two Cloudflare Workers and one SQLite-backed Durable
+  Object. The public Worker accepts signed webhooks. The Access-protected
+  Worker serves event history, live subscriptions, and the webapp.
+- A webapp package owns the browser and asset server functions.
+- A local package connects outbound to the relay and saves consumer cursors.
+- A Codex tool package exposes the local client through the `gh-watch` plugin.
 - A live harness for GitHub, Cloudflare Access, Chromium, and the MCP tool.
 
-The relay Worker owns the only production deployment. It serves the browser
-assets on the same authenticated hostname.
+See the [workspace guide](docs/workspace.md) for component ownership and the
+[deployment guide](docs/deployment.md) for production setup.
 
 ## Public API
 

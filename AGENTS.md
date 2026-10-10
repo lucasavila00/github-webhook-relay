@@ -112,6 +112,12 @@ request body when the user requests that issue or pull request.
 Treat `null`, `undefined`, and a missing property as the same absent value. A
 library can require a distinction. Document each such distinction.
 
+Beff applies this rule to nullable schema properties. For a required property
+such as `foo: T | null | undefined`, its validator accepts `null`, `undefined`,
+or a wire object without `foo`. The required TypeScript property does not make
+the wire property required. A non-nullable Beff property stays non-nullable.
+See [Nullish values](docs/contrib/nullish-values.md) for examples.
+
 - Declare each nullable type with both `null` and `undefined`. Do not use only
   one of these types in a nullable union.
 - Declare nullable function inputs as `T | null | undefined`.
