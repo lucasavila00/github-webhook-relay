@@ -1,15 +1,13 @@
 import type { Capability, Capabilities } from "@beff/diy/capabilities";
-import type { EventType } from "@github-webhook-relay/contracts";
+import type {
+  ErrorCode,
+  EventType,
+  HttpError,
+  StoredDelivery,
+} from "@github-webhook-relay/core";
+import { Parsers } from "@github-webhook-relay/core";
 
-import { GitHubParsers } from "./github.ts";
-
-export type StoredDelivery = Readonly<{
-  deliveryId: string;
-  eventType: EventType;
-  repository: string;
-  receivedAt: string;
-  payload: ArrayBuffer;
-}>;
+export type { StoredDelivery } from "@github-webhook-relay/core";
 
 type Cryptography = Readonly<{
   verify: (body: ArrayBuffer, signature: Uint8Array<ArrayBuffer>) => Promise<boolean>;
@@ -60,25 +58,25 @@ export async function ingestGitHubWebhook(
   capabilities: Capabilities<IngestionCapabilities>,
   request: Request,
 ): Promise<Response> {
+  const body = await request.arrayBuffer();
   const signature = parseSignature(request.headers.get("x-hub-signature-256"));
   if (signature === undefined) {
-    return new Response(null, { status: 401 });
+    return errorResponse(401, "unauthorized", "Unauthorized.");
   }
 
-  const body = await request.arrayBuffer();
   if (!(await capabilities.cryptography.verify(body, signature))) {
-    return new Response(null, { status: 401 });
+    return errorResponse(401, "unauthorized", "Unauthorized.");
   }
 
   const payload = parseJsonObject(body);
   if (payload === undefined) {
-    return new Response(null, { status: 400 });
+    return errorResponse(400, "invalid_request", "Invalid request.");
   }
 
   const deliveryId = request.headers.get("x-github-delivery");
   const githubEvent = request.headers.get("x-github-event");
   if (deliveryId === null || deliveryId.length === 0 || githubEvent === null || githubEvent.length === 0) {
-    return new Response(null, { status: 400 });
+    return errorResponse(400, "invalid_request", "Invalid request.");
   }
 
   const selection = selectGitHubEvent(githubEvent, payload);
@@ -86,7 +84,7 @@ export async function ingestGitHubWebhook(
     return new Response(null, { status: 204 });
   }
   if (selection.kind === "invalid") {
-    return new Response(null, { status: 400 });
+    return errorResponse(400, "invalid_request", "Invalid request.");
   }
 
   try {
@@ -100,15 +98,24 @@ export async function ingestGitHubWebhook(
     if (result.inserted) capabilities.eventPublisher.publish(result.position);
     return new Response(null, { status: 202 });
   } catch {
-    return new Response(null, { status: 500 });
+    return errorResponse(500, "internal_error", "Internal error.");
   }
+}
+
+function errorResponse(
+  status: number,
+  code: ErrorCode,
+  message: string,
+): Response {
+  const body: HttpError = { error: { code, message } };
+  return Response.json(body, { status });
 }
 
 export function selectGitHubEvent(
   githubEvent: string,
   payload: Readonly<Record<string, unknown>>,
 ): Selection {
-  const actionResult = GitHubParsers.GitHubActionPayload.safeParse(payload);
+  const actionResult = Parsers.GitHubActionPayload.safeParse(payload);
   if (!actionResult.success) {
     return { kind: "ignored" };
   }
@@ -119,17 +126,17 @@ export function selectGitHubEvent(
   }
 
   if (type === "pull_request") {
-    const selectionResult = GitHubParsers.GitHubPullRequestSelection.safeParse(payload);
+    const selectionResult = Parsers.GitHubPullRequestSelection.safeParse(payload);
     if (!selectionResult.success || !selectionResult.data.pull_request.merged) {
       return { kind: "ignored" };
     }
-    const result = GitHubParsers.GitHubPullRequestPayload.safeParse(payload);
+    const result = Parsers.GitHubPullRequestPayload.safeParse(payload);
     return result.success
       ? selected(type, result.data.repository.full_name)
       : { kind: "invalid" };
   }
 
-  const result = GitHubParsers.GitHubRepositoryPayload.safeParse(payload);
+  const result = Parsers.GitHubRepositoryPayload.safeParse(payload);
   return result.success
     ? selected(type, result.data.repository.full_name)
     : { kind: "invalid" };
