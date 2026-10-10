@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@beff/diy": "0.0.33",
-    "@github-webhook-relay/contracts": "workspace:*"
+    "@github-webhook-relay/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.10.0",

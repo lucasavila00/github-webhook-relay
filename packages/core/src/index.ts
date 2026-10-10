@@ -8,6 +8,10 @@ export {
   type EventPage,
   type EventQuery,
   type EventType,
+  type GitHubActionPayload,
+  type GitHubPullRequestPayload,
+  type GitHubPullRequestSelection,
+  type GitHubRepositoryPayload,
   type HttpError,
   type NonEmptyString,
   type PublicError,
@@ -22,8 +26,17 @@ import type {
   EventLimit,
   EventPage,
   EventQuery,
+  EventType,
 } from "./parser.ts";
 import { Parsers } from "./parser.ts";
+
+export type StoredDelivery = Readonly<{
+  deliveryId: string;
+  eventType: EventType;
+  repository: string;
+  receivedAt: string;
+  payload: ArrayBuffer;
+}>;
 
 export const DEFAULT_EVENT_LIMIT = 100;
 export const MAX_EVENT_LIMIT = 1_000;
