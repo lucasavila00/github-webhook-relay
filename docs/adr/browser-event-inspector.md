@@ -15,23 +15,24 @@ kit, router, state library, or client-side auth library. One page contains the
 filters, ordered event list, page controls, connection status, and a payload
 detail panel.
 
-Deploy the Vite output and server as one Worker with Wrangler static assets.
-The existing relay custom hostname remains the only supported origin. Set the
-asset binding to run the Worker first for every request. The server applies the
-agreed Cloudflare Access JWT check, routes `/api/*` and `/webhooks/github` to
-the relay handlers, and serves other requests from the asset binding. Thus,
-the browser uses its Access cookie with same-origin HTTP and WebSocket calls.
+The existing `packages/relay` Wrangler deployment remains the only production
+Worker. Preserve its `github-webhook-relay` name, `EventRelay` binding, SQLite
+migrations, and Durable Object namespace. Its existing custom hostname remains
+the only supported origin. Do not deploy `packages/webapp` as another Worker.
+
+Build the Preact browser in `packages/webapp`. Export its server functions
+through an explicit workspace export. The relay entry point imports those
+functions, supplies explicit capabilities, and serves the Vite output through
+the Wrangler asset binding. Set the binding to run the relay Worker first for
+every request. The relay applies the agreed Cloudflare Access JWT check, routes
+`/api/*` and `/webhooks/github` to its existing handlers, and gives other
+requests to the asset server. The browser uses its Access cookie with
+same-origin HTTP and WebSocket calls. One relay command builds and deploys the
+Worker and browser assets together.
 
 The browser uses the shared event, query, page, and stream types and Beff
-parsers. It models application data as read-only discriminated unions:
-
-```ts
-type View =
-  | Readonly<{ state: "loading"; previous?: Ready }>
-  | Readonly<{ state: "ready"; value: Ready }>
-  | Readonly<{ state: "error"; message: string; previous?: Ready }>;
-type Connection = "connecting" | "live" | "disconnected";
-```
+parsers. It models the view as a read-only `loading | ready | error` union and
+the connection as a `connecting | live | disconnected` union.
 
 `Ready` contains the active exact repository and event-type filters, immutable
 pages, the current page index, selected event ID, stream checkpoint, and
@@ -65,16 +66,12 @@ patched globals, or DOM emulation.
 
 Do not add multi-user management, session control, or event cleanup. Move this
 contract to maintained webapp documentation and delete this proposal in the
-implementation pull request.
+implementation pull request. At that time, update the workspace document and
+remove the obsolete standalone webapp Wrangler deployment configuration.
 
 ## Consequences
 
 - Access protects assets and APIs through the same custom hostname and Worker.
+- Existing SQLite data stays in the relay Durable Object namespace.
 - The live stream starts at the tail of the pages that the user has loaded.
 - The first release has one event-list route and no deep links.
-
-## Alternatives
-
-Vanilla DOM code removes Preact, but it needs manual render and event lifecycle
-code for the same state transitions. A larger framework adds routing and server
-rendering features that this single authenticated inspector does not need.
