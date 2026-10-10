@@ -61,6 +61,28 @@ describe.sequential("local client with the relay Worker", () => {
     })).resolves.toEqual({ type: "timeout" });
   }, 30_000);
 
+  it("publishes a live ingress event to a waiting relay client", async () => {
+    const fixture = await workerFixture();
+    let markSubscribed: (() => void) | null | undefined;
+    const subscribed = new Promise<void>((resolve) => {
+      markSubscribed = resolve;
+    });
+    const batch = nextMatchingBatch(fixture.restartClient(() => {
+      markSubscribed?.();
+    }), {
+      consumer: "live-ingress",
+      filters: { repository: "owner/live", type: "issues" },
+      waitMilliseconds: 5_000,
+      signal: undefined,
+    });
+    await subscribed;
+    await fixture.send("live-ingress", "owner/live");
+
+    expect((await batch).events).toMatchObject([
+      { deliveryId: "live-ingress", repository: "owner/live" },
+    ]);
+  }, 30_000);
+
   it("repeats a real unacknowledged batch and rejects stale tokens", async () => {
     const fixture = await workerFixture();
     await fixture.send("repeat", "owner/repeat");
@@ -184,12 +206,13 @@ describe.sequential("local client with the relay Worker", () => {
     });
     await connected;
     await stopChild(fixture.worker.child);
-    const worker = await startWorker(fixture.teamDomain, {
+    await startOwnerWorker(fixture.teamDomain, {
       port: fixture.worker.port,
       persist: fixture.worker.persist,
     });
+    await waitForBinding(fixture.worker.ingressPort);
     expect(await sendWebhook(
-      worker.port,
+      fixture.worker.ingressPort,
       fixture.token,
       "after-restart",
       "owner/reconnect",
@@ -227,6 +250,7 @@ describe.sequential("local client with the relay Worker", () => {
 
 type WorkerRuntime = Readonly<{
   child: ChildProcess;
+  ingressPort: number;
   port: number;
   persist: string;
 }>;
@@ -280,7 +304,7 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
     restartClient: createClient,
     send: async (delivery, repository) => {
       expect(await sendWebhook(
-        worker.port,
+        worker.ingressPort,
         token,
         delivery,
         repository,
@@ -302,8 +326,14 @@ function observedSocketService(
   return {
     connect: async (url, credentials, signal) => {
       const socket = await service.connect(url, credentials, signal);
-      onConnected();
-      return socket;
+      return {
+        close: socket.close,
+        receive: socket.receive,
+        send: (message) => {
+          socket.send(message);
+          onConnected();
+        },
+      };
     },
   };
 }
@@ -312,13 +342,37 @@ async function startWorker(
   teamDomain: string,
   existing: Readonly<{ port: number; persist: string }> | null | undefined,
 ): Promise<WorkerRuntime> {
+  const owner = await startOwnerWorker(teamDomain, existing);
+  const ingressPort = await unusedPort();
+  const directory = join(process.cwd(), "../relay");
+  const ingressChild = spawn(
+    join(directory, "node_modules/.bin/wrangler"),
+    [
+      "dev", "--config", "wrangler.ingress.jsonc",
+      "--ip", "127.0.0.1", "--port", String(ingressPort),
+    ],
+    {
+      cwd: directory,
+      env: { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false" },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  await waitForWorker(ingressChild);
+  cleanups.push(async () => stopChild(ingressChild));
+  return { ...owner, ingressPort };
+}
+
+async function startOwnerWorker(
+  teamDomain: string,
+  existing: Readonly<{ port: number; persist: string }> | null | undefined,
+): Promise<Readonly<{ child: ChildProcess; port: number; persist: string }>> {
   const port = existing?.port ?? await unusedPort();
   const persist = existing?.persist ?? await temporaryDirectory("gh-watch-worker-");
   const directory = join(process.cwd(), "../relay");
   const child = spawn(
     join(directory, "node_modules/.bin/wrangler"),
     [
-      "dev", "--config", "test/browser-wrangler.jsonc",
+      "dev", "--config", "wrangler.jsonc",
       "--ip", "127.0.0.1", "--port", String(port),
       "--persist-to", persist,
       "--var", "ACCESS_AUD:test-audience",
@@ -375,6 +429,29 @@ async function sendWebhook(
     repository: { full_name: repository },
     issue: { number: 1 },
   });
+  return sendSignedWebhook(port, token, delivery, "issues", body);
+}
+
+async function waitForBinding(port: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const status = await sendSignedWebhook(port, "", "binding-ready", "ping", "{}");
+    if (status === 204) return;
+    if (status !== 503) {
+      throw new Error(`Binding readiness returned ${status}.`);
+    }
+    await delay(50);
+  }
+  throw new Error("Binding readiness timed out.");
+}
+
+async function sendSignedWebhook(
+  port: number,
+  token: string,
+  delivery: string,
+  event: string,
+  body: string,
+): Promise<number> {
   const signature = createHmac("sha256", "test-secret").update(body).digest("hex");
   return await new Promise<number>((resolve, reject) => {
     const request = httpRequest(
@@ -387,7 +464,7 @@ async function sendWebhook(
           "content-type": "application/json",
           "Cf-Access-Jwt-Assertion": token,
           "x-github-delivery": delivery,
-          "x-github-event": "issues",
+          "x-github-event": event,
           "x-hub-signature-256": `sha256=${signature}`,
         },
       },

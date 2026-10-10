@@ -1,42 +1,19 @@
 # Cloudflare Access setup
 
-The deployment uses two Workers on two custom hostnames. The
-`github-webhook-relay` Worker serves the browser, event history API, and event
-stream on `relay.example.com`. The `github-webhook-relay-ingress` Worker
-receives GitHub webhooks on `hooks.example.com`.
+For the complete two-Worker setup, follow [Deployment](deployment.md). To
+connect GitHub and the local client after deployment, follow
+[Getting started](getting-started.md).
 
-Cloudflare Access protects only the relay hostname. The ingress hostname does
-not use Access. It accepts only `POST /webhooks/github` and forwards the
-request to the `EventRelay` Durable Object in `github-webhook-relay`. The
-Durable Object verifies the GitHub HMAC before it accepts a delivery.
-
-The repository has these Wrangler configurations:
-
-- `packages/relay/wrangler.jsonc` configures `github-webhook-relay`. This
-  Worker owns the `EVENT_RELAY` namespace and its SQLite data.
-- `packages/relay/wrangler.ingress.jsonc` configures
-  `github-webhook-relay-ingress`. Its external `EVENT_RELAY` binding uses
-  `script_name: "github-webhook-relay"`.
-
-Both configurations disable `workers.dev` and preview URLs. Do not add an
-Access bypass policy, a Worker-level Access application, or another public
-route to either Worker.
+Cloudflare Access protects only the relay hostname. The public ingress
+hostname has no Access application or bypass policy. Do not add Worker-level
+Access. The hostname-scoped relay application supports protected HTTP and
+WebSocket requests.
 
 ## Access application
 
 Create one hostname Access application for the exact relay hostname. Add an
 Allow policy for the exact email `lucaxx@gmail.com`. Use the one-time PIN
 identity provider. Add a Service Auth policy for one `gh-watch` service token.
-
-Record these values:
-
-- Access team domain, such as `https://team.cloudflareaccess.com`
-- Relay hostname
-- Ingress webhook URL, such as
-  `https://hooks.example.com/webhooks/github`
-- Access application audience
-- Access service-token client ID and secret
-- GitHub webhook secret
 
 The relay Worker validates each Access JWT signature, issuer, audience, and
 expiry. It reads `Cf-Access-Jwt-Assertion` first. If that header is absent, it
