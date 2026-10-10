@@ -80,27 +80,35 @@ describe.sequential("local client with the relay Worker", () => {
 
   it("keeps real progress independent for named consumers", async () => {
     const fixture = await workerFixture();
-    await fixture.send("independent-a", "owner/independent-a");
-    await fixture.send("independent-b", "owner/independent-b");
+    await fixture.send("independent-first", "owner/independent");
     const firstA = await nextMatchingBatch(fixture.capabilities, {
-      consumer: "first",
-      filters: { repository: "owner/independent-a", type: "issues" },
+      consumer: "consumer-a",
+      filters: { repository: "owner/independent", type: "issues" },
       waitMilliseconds: 5_000,
     });
+    await acknowledgeEvents(fixture.capabilities, firstA.acknowledgement);
+    await fixture.send("independent-later", "owner/independent");
     const firstB = await nextMatchingBatch(fixture.capabilities, {
-      consumer: "first",
-      filters: { repository: "owner/independent-b", type: "issues" },
+      consumer: "consumer-b",
+      filters: { repository: "owner/independent", type: "issues" },
       waitMilliseconds: 5_000,
     });
-    const secondA = await nextMatchingBatch(fixture.capabilities, {
-      consumer: "second",
-      filters: { repository: "owner/independent-a", type: "issues" },
+    const laterA = await nextMatchingBatch(fixture.capabilities, {
+      consumer: "consumer-a",
+      filters: { repository: "owner/independent", type: "issues" },
+      waitMilliseconds: 5_000,
+    });
+    await fixture.send("independent-filter", "owner/other-filter");
+    const filteredA = await nextMatchingBatch(fixture.capabilities, {
+      consumer: "consumer-a",
+      filters: { repository: "owner/other-filter", type: "issues" },
       waitMilliseconds: 5_000,
     });
 
-    expect(firstA.events).toMatchObject([{ deliveryId: "independent-a" }]);
-    expect(firstB.events).toMatchObject([{ deliveryId: "independent-b" }]);
-    expect(secondA.events).toMatchObject([{ deliveryId: "independent-a" }]);
+    expect(firstA.events).toMatchObject([{ deliveryId: "independent-first" }]);
+    expect(firstB.events).toMatchObject([{ deliveryId: "independent-first" }]);
+    expect(laterA.events).toMatchObject([{ deliveryId: "independent-later" }]);
+    expect(filteredA.events).toMatchObject([{ deliveryId: "independent-filter" }]);
     const files = (await readdir(fixture.stateDirectory)).filter((name) =>
       name.endsWith(".json"),
     );
@@ -138,12 +146,13 @@ describe.sequential("local client with the relay Worker", () => {
 
   it("reconnects after the actual Worker process restarts", async () => {
     const fixture = await workerFixture();
-    const pending = watchEvents(fixture.capabilities, {
+    await fixture.send("before-restart", "owner/reconnect");
+    const before = await nextMatchingBatch(fixture.capabilities, {
       consumer: "reconnect",
       filters: { repository: "owner/reconnect", type: "issues" },
-      waitMilliseconds: 10_000,
+      waitMilliseconds: 5_000,
     });
-    await delay(300);
+    await acknowledgeEvents(fixture.capabilities, before.acknowledgement);
     await stopChild(fixture.worker.child);
     const worker = await startWorker(fixture.teamDomain, {
       port: fixture.worker.port,
@@ -152,14 +161,26 @@ describe.sequential("local client with the relay Worker", () => {
     expect(await sendWebhook(
       worker.port,
       fixture.token,
-      "reconnect",
+      "after-restart",
       "owner/reconnect",
     )).toBe(202);
-
-    await expect(pending).resolves.toMatchObject({
-      type: "batch",
-      events: [{ deliveryId: "reconnect" }],
+    const retained = await nextMatchingBatch(fixture.capabilities, {
+      consumer: "retained-history",
+      filters: { repository: "owner/reconnect", type: "issues" },
+      waitMilliseconds: 5_000,
     });
+    const resumed = await nextMatchingBatch(fixture.restartClient(), {
+      consumer: "reconnect",
+      filters: { repository: "owner/reconnect", type: "issues" },
+      waitMilliseconds: 5_000,
+    });
+
+    expect(retained.events.map((event) => event.deliveryId)).toEqual([
+      "before-restart",
+    ]);
+    expect(resumed.events.map((event) => event.deliveryId)).toEqual([
+      "after-restart",
+    ]);
   }, 30_000);
 
   it("reports a real Worker authentication rejection", async () => {
