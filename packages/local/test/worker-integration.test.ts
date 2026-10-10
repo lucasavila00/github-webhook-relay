@@ -61,6 +61,28 @@ describe.sequential("local client with the relay Worker", () => {
     })).resolves.toEqual({ type: "timeout" });
   }, 30_000);
 
+  it("publishes a live ingress event to a waiting relay client", async () => {
+    const fixture = await workerFixture();
+    let markSubscribed: (() => void) | null | undefined;
+    const subscribed = new Promise<void>((resolve) => {
+      markSubscribed = resolve;
+    });
+    const batch = nextMatchingBatch(fixture.restartClient(() => {
+      markSubscribed?.();
+    }), {
+      consumer: "live-ingress",
+      filters: { repository: "owner/live", type: "issues" },
+      waitMilliseconds: 5_000,
+      signal: undefined,
+    });
+    await subscribed;
+    await fixture.send("live-ingress", "owner/live");
+
+    expect((await batch).events).toMatchObject([
+      { deliveryId: "live-ingress", repository: "owner/live" },
+    ]);
+  }, 30_000);
+
   it("repeats a real unacknowledged batch and rejects stale tokens", async () => {
     const fixture = await workerFixture();
     await fixture.send("repeat", "owner/repeat");
@@ -303,8 +325,14 @@ function observedSocketService(
   return {
     connect: async (url, credentials, signal) => {
       const socket = await service.connect(url, credentials, signal);
-      onConnected();
-      return socket;
+      return {
+        close: socket.close,
+        receive: socket.receive,
+        send: (message) => {
+          socket.send(message);
+          onConnected();
+        },
+      };
     },
   };
 }
