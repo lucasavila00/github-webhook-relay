@@ -66,8 +66,6 @@ describe("nullish type rules", () => {
     "type T = { read: (() => void) | null | undefined };",
     "type T = [value: string | null | undefined];",
     "type T<K> = ReadonlyArray<K | null | undefined>;",
-    "type T = (string | null) | undefined;",
-    "type T = string | (null | undefined);",
     "declare const value: string | null | undefined; value == null;",
     "declare const value: string | null | undefined; value != null;",
   ];

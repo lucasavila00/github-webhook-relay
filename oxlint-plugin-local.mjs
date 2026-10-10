@@ -6,18 +6,7 @@ const getTypeNode = (typeAnnotation) => {
   return typeNode.type === "TSParenthesizedType" ? getTypeNode(typeNode.typeAnnotation) : typeNode;
 };
 
-const unionTypes = (node) => {
-  const typeNode = getTypeNode(node);
-  return typeNode?.type === "TSUnionType"
-    ? typeNode.types.flatMap(unionTypes)
-    : [typeNode].filter(Boolean);
-};
-
-const enclosingUnion = (node) => {
-  let parent = node.parent;
-  while (parent?.type === "TSParenthesizedType") parent = parent.parent;
-  return parent?.type === "TSUnionType" ? parent : null;
-};
+const hasType = (types, type) => types.some((unionType) => getTypeNode(unionType)?.type === type);
 
 const noIncompleteNullishTypes = {
   meta: {
@@ -48,20 +37,18 @@ const noIncompleteNullishTypes = {
       },
       TSPropertySignature: checkOptional,
       TSNullKeyword(node) {
-        if (enclosingUnion(node) == null) {
+        if (node.parent.type !== "TSUnionType") {
           context.report({ node, messageId: "standalone" });
         }
       },
       TSUndefinedKeyword(node) {
-        if (enclosingUnion(node) == null) {
+        if (node.parent.type !== "TSUnionType") {
           context.report({ node, messageId: "standalone" });
         }
       },
       TSUnionType(node) {
-        if (enclosingUnion(node) != null) return;
-        const types = unionTypes(node);
-        const hasNull = types.some((type) => type.type === "TSNullKeyword");
-        const hasUndefined = types.some((type) => type.type === "TSUndefinedKeyword");
+        const hasNull = hasType(node.types, "TSNullKeyword");
+        const hasUndefined = hasType(node.types, "TSUndefinedKeyword");
         if (hasNull !== hasUndefined) context.report({ node, messageId: "incomplete" });
       },
     };
