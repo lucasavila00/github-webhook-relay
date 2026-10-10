@@ -15,9 +15,18 @@ type Cryptography = Readonly<{
   verify: (body: ArrayBuffer, signature: Uint8Array<ArrayBuffer>) => Promise<boolean>;
 }>;
 
+export type AppendResult = Readonly<{
+  inserted: boolean;
+  position: string;
+}>;
+
 export type EventStore = Readonly<{
-  append: (delivery: StoredDelivery) => string;
+  append: (delivery: StoredDelivery) => AppendResult;
   hasPosition: (position: string) => boolean;
+}>;
+
+type EventPublisher = Readonly<{
+  publish: (position: string) => void;
 }>;
 
 type Clock = Readonly<{
@@ -26,10 +35,12 @@ type Clock = Readonly<{
 
 export type CryptographyCapability = Capability<"cryptography", Cryptography>;
 export type EventStoreCapability = Capability<"eventStore", EventStore>;
+export type EventPublisherCapability = Capability<"eventPublisher", EventPublisher>;
 export type ClockCapability = Capability<"clock", Clock>;
 type IngestionCapabilities =
   | CryptographyCapability
   | EventStoreCapability
+  | EventPublisherCapability
   | ClockCapability;
 
 type SelectedPayload = Readonly<{
@@ -79,13 +90,14 @@ export async function ingestGitHubWebhook(
   }
 
   try {
-    capabilities.eventStore.append({
+    const result = capabilities.eventStore.append({
       deliveryId,
       eventType: selection.value.type,
       repository: selection.value.repository,
       receivedAt: capabilities.clock.now(),
       payload: body,
     });
+    if (result.inserted) capabilities.eventPublisher.publish(result.position);
     return new Response(null, { status: 202 });
   } catch {
     return new Response(null, { status: 500 });

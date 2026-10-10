@@ -20,8 +20,21 @@ import {
   type CryptographyCapability,
   type EventStore,
   type EventStoreCapability,
+  type EventPublisherCapability,
   type StoredDelivery,
 } from "./ingestion.ts";
+import {
+  closePendingSubscription,
+  closeStream,
+  createStreamSockets,
+  createStreamStore,
+  failStream,
+  initializeStreamStore,
+  publishStoredEvent,
+  subscribeToEvents,
+  type StreamSocketsCapability,
+  type StreamStoreCapability,
+} from "./stream.ts";
 
 type RelayEnv = Env & Readonly<{ WEBHOOK_SECRET: string }>;
 
@@ -40,19 +53,31 @@ type RelayConfiguration = Readonly<{
 const objectName = "github-webhook-relay";
 
 export class EventRelay extends DurableObject<RelayEnv> {
+  readonly #subscriptionTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>();
+
   constructor(ctx: DurableObjectState, env: RelayEnv) {
     super(ctx, env);
     initializeEventStore(ctx.storage);
+    initializeStreamStore(ctx.storage);
   }
 
   override fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "POST" && url.pathname === "/webhooks/github") {
       const capabilities = Capabilities.create<
-        CryptographyCapability | EventStoreCapability | ClockCapability
+        | CryptographyCapability
+        | EventStoreCapability
+        | EventPublisherCapability
+        | ClockCapability
       >({
         cryptography: createCryptography(this.env.WEBHOOK_SECRET),
         eventStore: createEventStore(this.ctx.storage),
+        eventPublisher: {
+          publish: (position) => publishStoredEvent(
+            this.#streamCapabilities(),
+            position,
+          ),
+        },
         clock: { now: () => new Date().toISOString() },
       });
       return ingestGitHubWebhook(capabilities, request);
@@ -63,7 +88,80 @@ export class EventRelay extends DurableObject<RelayEnv> {
       });
       return Promise.resolve(getEventHistory(capabilities, request));
     }
+    if (request.method === "GET" && url.pathname === "/api/events/stream") {
+      if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+        return Promise.resolve(Response.json(
+          { error: { code: "invalid_request", message: "WebSocket required." } },
+          { status: 400 },
+        ));
+      }
+      const pair = new WebSocketPair();
+      const client = pair[0];
+      const server = pair[1];
+      this.ctx.acceptWebSocket(server);
+      const timer = setTimeout(() => {
+        this.#subscriptionTimers.delete(server);
+        closePendingSubscription(this.#streamCapabilities(), server);
+      }, 10_000);
+      this.#subscriptionTimers.set(server, timer);
+      return Promise.resolve(new Response(null, { status: 101, webSocket: client }));
+    }
     return Promise.resolve(new Response(null, { status: 404 }));
+  }
+
+  override webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
+    const timer = this.#subscriptionTimers.get(socket);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.#subscriptionTimers.delete(socket);
+    }
+    const connectionKey = crypto.randomUUID();
+    try {
+      subscribeToEvents(
+        this.#streamCapabilities(),
+        socket,
+        connectionKey,
+        message,
+      );
+    } catch {
+      createStreamStore(this.ctx.storage).close(connectionKey);
+      failStream(this.#streamCapabilities(), socket);
+    }
+  }
+
+  override webSocketClose(socket: WebSocket): void {
+    this.#clearTimer(socket);
+    closeStream(
+      Capabilities.create<StreamStoreCapability>({
+        streamStore: createStreamStore(this.ctx.storage),
+      }),
+      socket.deserializeAttachment(),
+    );
+  }
+
+  override webSocketError(socket: WebSocket): void {
+    this.#clearTimer(socket);
+    closeStream(
+      Capabilities.create<StreamStoreCapability>({
+        streamStore: createStreamStore(this.ctx.storage),
+      }),
+      socket.deserializeAttachment(),
+    );
+  }
+
+  #streamCapabilities(): Capabilities<
+    StreamStoreCapability | StreamSocketsCapability
+  > {
+    return Capabilities.create<StreamStoreCapability | StreamSocketsCapability>({
+      streamStore: createStreamStore(this.ctx.storage),
+      streamSockets: createStreamSockets(this.ctx),
+    });
+  }
+
+  #clearTimer(socket: WebSocket): void {
+    const timer = this.#subscriptionTimers.get(socket);
+    if (timer !== undefined) clearTimeout(timer);
+    this.#subscriptionTimers.delete(socket);
   }
 }
 
@@ -82,7 +180,7 @@ export function initializeEventStore(storage: DurableObjectStorage): void {
 
 export function createEventStore(storage: DurableObjectStorage): EventStore {
   return {
-    append: (delivery: StoredDelivery): string =>
+    append: (delivery: StoredDelivery) =>
       storage.transactionSync(() => {
         storage.sql.exec(
           `INSERT INTO events (
@@ -95,13 +193,16 @@ export function createEventStore(storage: DurableObjectStorage): EventStore {
           delivery.receivedAt,
           delivery.payload,
         );
+        const inserted = storage.sql.exec<{ changed: number }>(
+          "SELECT changes() AS changed",
+        ).one().changed === 1;
         const row = storage.sql.exec<{ position: string }>(
           `SELECT CAST(position AS TEXT) AS position
            FROM events
            WHERE delivery_id = ?`,
           delivery.deliveryId,
         ).one();
-        return row.position;
+        return { inserted, position: row.position };
       }),
     hasPosition: (position: string): boolean =>
       storage.sql.exec<{ found: number }>(
