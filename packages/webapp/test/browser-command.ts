@@ -12,6 +12,8 @@ export type BrowserFlowResult = Readonly<{
   disconnected: string;
   empty: string;
   error: string;
+  errorPayload: string;
+  errorOlderCount: number;
 }>;
 
 export async function runRenderedFlow(
@@ -47,6 +49,15 @@ export async function runRenderedFlow(
   await page.getByRole("button", { name: "Older" }).click();
   await page.getByRole("button", { name: "Later" }).click();
 
+  await page.setExtraHTTPHeaders({ "Cf-Access-Jwt-Assertion": "invalid" });
+  await page.getByRole("button", { name: "Apply filters" }).click();
+  const error = await page.getByRole("alert").innerText();
+  await page.locator("ol li button").first().click();
+  const errorPayload = await page.getByRole("complementary").innerText();
+  await page.getByRole("button", { name: "Older" }).click();
+  const errorOlderCount = await page.locator("ol li").count();
+  await page.setExtraHTTPHeaders({});
+
   await page.getByLabel("Event type").selectOption("issues");
   await page.getByRole("button", { name: "Apply filters" }).click();
   const loading = page.getByText("Loading events…");
@@ -70,9 +81,6 @@ export async function runRenderedFlow(
   await page.getByRole("button", { name: "Apply filters" }).click();
   const empty = await page.getByText("No events match these filters.").innerText();
 
-  await page.setExtraHTTPHeaders({ "Cf-Access-Jwt-Assertion": "invalid" });
-  await page.getByRole("button", { name: "Apply filters" }).click();
-  const error = await page.getByRole("alert").innerText();
   await page.close();
   return {
     title,
@@ -84,6 +92,8 @@ export async function runRenderedFlow(
     disconnected,
     empty,
     error,
+    errorPayload,
+    errorOlderCount,
   };
 }
 

@@ -64,14 +64,15 @@ export function reduceView(view: View, action: Action): View {
       ...(previous === undefined ? {} : { previous }),
     };
   }
-  if (view.state !== "ready") return view;
-  const ready = view.value;
+  const ready = readyValue(view);
+  if (ready === undefined) return view;
   if (action.type === "older" && ready.pageIndex > 0) {
-    return readyView({ ...ready, pageIndex: ready.pageIndex - 1 });
+    return retainState(view, { ...ready, pageIndex: ready.pageIndex - 1 });
   }
   if (action.type === "select") {
-    return readyView({ ...ready, selectedEventId: action.id });
+    return retainState(view, { ...ready, selectedEventId: action.id });
   }
+  if (view.state !== "ready") return view;
   if (action.type === "connection") {
     return readyView({ ...ready, connection: action.value });
   }
@@ -128,3 +129,8 @@ function readyValue(view: View): Ready | undefined {
 }
 
 const readyView = (value: Ready): View => ({ state: "ready", value });
+
+function retainState(view: View, value: Ready): View {
+  if (view.state === "ready") return readyView(value);
+  return { ...view, previous: value };
+}

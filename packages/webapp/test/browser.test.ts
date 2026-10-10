@@ -21,5 +21,7 @@ describe("rendered event inspector", () => {
     expect(result.disconnected).toContain("disconnected");
     expect(result.empty).toBe("No events match these filters.");
     expect(result.error.length).toBeGreaterThan(0);
+    expect(result.errorPayload).toContain('"marker": 26');
+    expect(result.errorOlderCount).toBe(25);
   }, 45_000);
 });
