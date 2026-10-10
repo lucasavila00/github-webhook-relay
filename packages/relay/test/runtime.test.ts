@@ -1,4 +1,5 @@
 import { env, SELF } from "cloudflare:test";
+import { Parsers } from "@github-webhook-relay/contracts";
 import { describe, expect, it } from "vitest";
 
 describe("relay runtime", () => {
@@ -11,5 +12,6 @@ describe("relay runtime", () => {
 
     expect(workerResponse.status).toBe(501);
     expect(objectResponse.status).toBe(501);
+    expect(Parsers.Cursor.parse("runtime-test")).toBe("runtime-test");
   });
 });
