@@ -216,16 +216,22 @@ export async function authenticateAccessRequest(
   configuration: AccessConfiguration,
   request: Request,
 ): Promise<AccessPrincipal | undefined> {
-  const assertion = request.headers.get("Cf-Access-Jwt-Assertion");
-  const token = assertion ?? request.headers
-    .get("Cookie")
-    ?.split(";")
-    .map((value) => value.trim())
-    .find((value) => value.startsWith("CF_Authorization="))
-    ?.slice("CF_Authorization=".length);
-  if (token === undefined || token === null) return undefined;
+  const token = accessToken(request.headers);
+  if (token === undefined) return undefined;
   const keys = await getAccessKeys(capabilities, configuration.teamDomain);
   return keys === undefined
     ? undefined
     : verifyAccessToken(capabilities, configuration, keys, token);
+}
+
+function accessToken(headers: Headers): string | undefined {
+  const assertion = headers.get("Cf-Access-Jwt-Assertion");
+  if (assertion !== null) return assertion;
+  const cookie = headers.get("Cookie");
+  if (cookie === null) return undefined;
+  for (const part of cookie.split(";")) {
+    const [name, ...value] = part.trim().split("=");
+    if (name === "CF_Authorization") return value.join("=");
+  }
+  return undefined;
 }

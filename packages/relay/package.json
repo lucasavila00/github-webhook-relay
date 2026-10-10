@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "wrangler types",
+    "generate": "pnpm --filter @github-webhook-relay/webapp build && wrangler types",
     "check": "tsc -p tsconfig.json",
     "test": "vitest run",
     "smoke:access": "node scripts/access-smoke.mjs"
   },
   "dependencies": {
     "@beff/diy": "0.0.33",
-    "@github-webhook-relay/core": "workspace:*"
+    "@github-webhook-relay/core": "workspace:*",
+    "@github-webhook-relay/webapp": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.4.0",
