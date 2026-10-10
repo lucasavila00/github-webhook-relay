@@ -836,6 +836,28 @@ describe.sequential("authenticated browser assets", () => {
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(await response.text()).toContain("<title>GitHub event history</title>");
   });
+
+  it("accepts the Access browser cookie and gives the header precedence", async () => {
+    const access = await createAccessSession();
+    const request = (headers: HeadersInit) => handleRelayRequest(
+      accessCapabilities,
+      {
+        accessAudience: env.ACCESS_AUD,
+        accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
+        relayHostname: env.RELAY_HOSTNAME,
+      },
+      env.EVENT_RELAY,
+      new Request("https://relay.test/", { headers }),
+    );
+    expect((await request({
+      Cookie: `other=value; CF_Authorization=${access.token}`,
+    })).status).toBe(200);
+    expect((await request({ Cookie: "CF_Authorization=invalid" })).status).toBe(401);
+    expect((await request({
+      "Cf-Access-Jwt-Assertion": "invalid",
+      Cookie: `CF_Authorization=${access.token}`,
+    })).status).toBe(401);
+  });
 });
 
 type StoredRow = Readonly<{

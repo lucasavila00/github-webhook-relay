@@ -179,13 +179,9 @@ function streamEffectKey(view: ReturnType<typeof initialView>): string {
   if (view.state !== "ready") return view.state;
   const ready = view.value;
   const page = currentPage(ready);
-  const cursor = ready.connection === "connecting"
-    ? ready.checkpoint ?? page.cursor
-    : "connected";
   return JSON.stringify([
     ready.filters,
-    ready.connection,
-    cursor,
+    ready.connection === "disconnected" ? "disconnected" : "active",
     page.hasMore,
     ready.pageIndex,
     ready.pages.length,
