@@ -1,4 +1,5 @@
 import { Capabilities } from "@beff/diy/capabilities";
+import type { StoredDelivery } from "@github-webhook-relay/core";
 import { DurableObject } from "cloudflare:workers";
 
 import {
@@ -20,7 +21,6 @@ import {
   type CryptographyCapability,
   type EventStore,
   type EventStoreCapability,
-  type StoredDelivery,
 } from "./ingestion.ts";
 
 type RelayEnv = Env & Readonly<{ WEBHOOK_SECRET: string }>;

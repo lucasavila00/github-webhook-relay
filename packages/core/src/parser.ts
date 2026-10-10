@@ -77,6 +77,38 @@ export type StreamMessage =
   | Readonly<{ type: "checkpoint"; cursor: Cursor }>
   | Readonly<{ type: "error"; error: PublicError }>;
 
+export type GitHubActionPayload = Readonly<{
+  action: string;
+}>;
+
+export type GitHubRepositoryPayload = Readonly<{
+  repository: Readonly<{
+    full_name: string;
+  }>;
+}>;
+
+export type GitHubPullRequestPayload = Readonly<{
+  action: "closed";
+  pull_request: Readonly<{
+    merged: true;
+  }>;
+  repository: Readonly<{
+    full_name: string;
+  }>;
+}>;
+
+export type GitHubPullRequestSelection = Readonly<{
+  pull_request: Readonly<{
+    merged: boolean;
+  }>;
+}>;
+export type RawEventQuery = Readonly<{
+  after?: string;
+  repository?: string;
+  type?: string;
+  limit?: string;
+}>;
+
 import parse from "./generated/parser";
 
 export const Parsers = parse.buildParsers<{
@@ -93,6 +125,11 @@ export const Parsers = parse.buildParsers<{
   PublicError: PublicError;
   HttpError: HttpError;
   StreamMessage: StreamMessage;
+  GitHubActionPayload: GitHubActionPayload;
+  GitHubRepositoryPayload: GitHubRepositoryPayload;
+  GitHubPullRequestPayload: GitHubPullRequestPayload;
+  GitHubPullRequestSelection: GitHubPullRequestSelection;
+  RawEventQuery: RawEventQuery;
 }>({
   stringFormats: {
     nonEmpty: (input: string): boolean => input.length > 0,

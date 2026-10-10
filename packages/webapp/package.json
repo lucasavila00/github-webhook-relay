@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@beff/diy": "0.0.33",
-    "@github-webhook-relay/contracts": "workspace:*"
+    "@github-webhook-relay/core": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.4.0",

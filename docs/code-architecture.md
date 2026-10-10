@@ -15,8 +15,10 @@ API is described in the [README](../README.md).
   browser renders event data and uses the public contract.
 - The local integration owns its consumer cursor and the connection to local
   Codex work. It consumes the relay API through an outbound connection.
-- Shared contract code owns wire types and their generated validators. It
-  must not import browser, Cloudflare, or local process implementations.
+- Shared core code owns application data types and all generated validators.
+  It must not import browser, Cloudflare, or local process implementations.
+  Keep runtime adapter types, DIY capability interfaces, and local function
+  types with their implementations.
 
 Keep dependencies explicit. Browser code must not import server secrets or
 local process code. Relay code must not depend on the webapp or Codex client.
@@ -119,8 +121,9 @@ effects explicit; it is not a reason to replace them with mocks in tests.
 ## Type validation with Beff
 
 Use [Beff](https://github.com/lucasavila00/beff) with `@beff/cli` and
-`@beff/client`. Define contract types in TypeScript and generate their runtime
-validators from those types. Keep parser declarations with the contract code.
+`@beff/client`. Define application data types in the core package and generate
+their runtime validators from those types. Keep all parser declarations and
+generated parser code in the core package.
 
 Configure a `beff.json` parser entry and output directory. Run
 `pnpm exec beff -p beff.json` in the owning package before type checking,

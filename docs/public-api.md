@@ -167,9 +167,10 @@ server closes the connection:
 
 Unexpected stream failures use the `internal_error` code.
 
-## Shared package
+## Core package
 
-`@github-webhook-relay/contracts` exports immutable TypeScript types, Beff
+`@github-webhook-relay/core` exports immutable application data types, Beff
 parsers, query defaults, query normalization, and a pure cursor pagination
-helper. Run `pnpm generate` before type checking or bundling code that imports
-the generated validators.
+helper. It owns all Beff generation, including validators for external GitHub
+payload fields. Run `pnpm generate` before type checking or bundling code that
+imports the generated validators.
