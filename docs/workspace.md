@@ -4,15 +4,17 @@ The repository is a pnpm workspace with five packages:
 
 | Path | Package | Owner |
 | --- | --- | --- |
-| `packages/core` | `@github-webhook-relay/core` | Shared types, logic, and Beff validators |
+| `packages/core` | `@github-webhook-relay/core` | Application data types and Beff validators |
 | `packages/relay` | `@github-webhook-relay/relay` | Relay Worker and Durable Object |
 | `packages/webapp` | `@github-webhook-relay/webapp` | Browser code and webapp Worker |
 | `packages/local` | `@github-webhook-relay/local` | Local Node.js integration |
 | `packages/codex-tool` | `@github-webhook-relay/codex-tool` | Codex MCP server bundle |
 
-The core package has no browser, Cloudflare, or Node.js dependency. The other
-packages can depend on core. Cloudflare bindings stay in the
-package that deploys them.
+The core package owns all application data types and all Beff-generated
+validators. It has no browser, Cloudflare, or Node.js dependency. The other
+packages can depend on core. Runtime adapter and DIY capability interfaces stay
+with their implementations. Cloudflare bindings stay in the package that
+deploys them.
 
 ## Development commands
 

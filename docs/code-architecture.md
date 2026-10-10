@@ -15,8 +15,10 @@ API is described in the [README](../README.md).
   browser renders event data and uses the public contract.
 - The local integration owns its consumer cursor and the connection to local
   Codex work. It consumes the relay API through an outbound connection.
-- Shared contract code owns wire types and their generated validators. It
-  must not import browser, Cloudflare, or local process implementations.
+- Shared core code owns application data types and all generated validators.
+  It must not import browser, Cloudflare, or local process implementations.
+  Keep runtime adapter types, DIY capability interfaces, and local function
+  types with their implementations.
 
 Keep dependencies explicit. Browser code must not import server secrets or
 local process code. Relay code must not depend on the webapp or Codex client.
@@ -119,8 +121,9 @@ effects explicit; it is not a reason to replace them with mocks in tests.
 ## Type validation with Beff
 
 Use [Beff](https://github.com/lucasavila00/beff) with `@beff/cli` and
-`@beff/client`. Define contract types in TypeScript and generate their runtime
-validators from those types. Keep parser declarations with the contract code.
+`@beff/client`. Define application data types in the core package and generate
+their runtime validators from those types. Keep all parser declarations and
+generated parser code in the core package.
 
 Configure a `beff.json` parser entry and output directory. Run
 `pnpm exec beff -p beff.json` in the owning package before type checking,
@@ -142,7 +145,7 @@ Keep Cloudflare bindings, compatibility settings, and Durable Object
 migrations in Wrangler configuration. Use package-local Wrangler commands
 through pnpm: `wrangler dev` for local execution, `wrangler types` for binding
 types, and `wrangler deploy` for deployment. See the
-[Wrangler commands](https://developers.cloudflare.com/workers/wrangler/commands/).
+[Wrangler](https://developers.cloudflare.com/workers/wrangler/).
 
 Generate binding types from configuration instead of maintaining a parallel
 handwritten environment definition. Use the standard Cloudflare runtime
@@ -152,8 +155,8 @@ integration. Do not build a custom replacement for Wrangler.
 ## Vitest tests without mocks
 
 Use Vitest for tests across the workspace. For Worker and Durable Object
-tests, use the official
-[Cloudflare Vitest integration](https://developers.cloudflare.com/workers/testing/vitest-integration/)
+tests, use the official Cloudflare
+[guide](https://developers.cloudflare.com/workers/testing/vitest-integration)
 to run code in the local Workers runtime with configured bindings.
 
 Build test capability bags with DIY, using real dependencies for that test
