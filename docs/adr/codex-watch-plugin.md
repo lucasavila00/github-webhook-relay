@@ -15,8 +15,12 @@ Add a `gh-watch` portable plugin at `plugins/gh-watch`. Its root `plugin.json`,
 repo marketplace at `.agents/plugins/marketplace.json` exposes the plugin. The
 package does not need a compatibility manifest, hooks, an app, or a UI.
 
-The plugin starts one bundled Node.js stdio MCP server. The server uses the
-maintained official MCP TypeScript SDK and exposes only these tools:
+The plugin starts one bundled Node.js stdio MCP server. Esbuild produces one
+ESM file that includes the local client, the maintained official MCP TypeScript
+SDK, and all other runtime dependencies. Only Node.js built-ins stay external.
+The MCP manifest runs `node ./dist/server.mjs` with `cwd` set to
+`${PLUGIN_ROOT}`. Thus, the installed plugin has no path to the checkout or a
+workspace package. The server exposes only these tools:
 
 ```ts
 watch(input: Readonly<{
@@ -24,7 +28,6 @@ watch(input: Readonly<{
   filters: Readonly<{ repository?: string; type?: EventType }>;
   waitMilliseconds: number;
 }>): Promise<WatchResult>;
-
 acknowledge(input: Readonly<{
   acknowledgement: Readonly<{ value: string }>;
 }>): Promise<Readonly<{ type: "acknowledged" }>>;
@@ -74,4 +77,4 @@ No provider response or tool call is mocked or canned.
 
 - Codex must call `watch` again after each timeout or handled batch.
 - The MCP process lifetime does not change durable consumer progress rules.
-- Installation needs Node.js and the four local environment values.
+- Installation needs Linux, `flock`, Node.js, and the four environment values.
