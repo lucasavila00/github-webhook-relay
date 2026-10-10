@@ -1,7 +1,7 @@
 node_modules/
 packages/core/src/generated/
-packages/relay/src/generated/
 packages/relay/worker-configuration.d.ts
 packages/webapp/worker-configuration.d.ts
 packages/webapp/dist/
 packages/e2e/dist/
+packages/local/src/generated/
