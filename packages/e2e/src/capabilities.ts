@@ -11,7 +11,9 @@ export type SocketProbeCapability = Capability<
     deniedStatus: (
       url: string,
       headers: Readonly<Record<string, string>>,
-    ) => Promise<Readonly<{ status: number; location?: string }>>;
+    ) => Promise<
+      Readonly<{ status: number; location: string | null | undefined }>
+    >;
   }>
 >;
 export type ClockCapability = Capability<

@@ -13,12 +13,12 @@ export type SocketCapability = Capability<"socket", Readonly<{ open: (url: strin
 export async function loadEventPage(
   capabilities: Capabilities<HttpCapability>,
   filters: EventFilters,
-  after?: Cursor,
+  after: Cursor | null | undefined,
 ): Promise<EventPage> {
   const query = new URLSearchParams({ limit: "25" });
-  if (after !== undefined) query.set("after", after);
-  if (filters.repository !== undefined) query.set("repository", filters.repository);
-  if (filters.type !== undefined) query.set("type", filters.type);
+  if (after != null) query.set("after", after);
+  if (filters.repository != null) query.set("repository", filters.repository);
+  if (filters.type != null) query.set("type", filters.type);
   const response = await capabilities.http.fetch(`/api/events?${query}`);
   const input: unknown = await response.json();
   if (!response.ok) {

@@ -72,10 +72,14 @@ export function createAdapters(
 async function probeDeniedSocket(
   relayUrl: string,
   headers: Readonly<Record<string, string>>,
-): Promise<Readonly<{ status: number; location?: string }>> {
+): Promise<
+  Readonly<{ status: number; location: string | null | undefined }>
+> {
   const url = new URL("/api/events/stream", relayUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  return await new Promise<Readonly<{ status: number; location?: string }>>(
+  return await new Promise<
+    Readonly<{ status: number; location: string | null | undefined }>
+  >(
     (resolveStatus, reject) => {
       const socket = new WebSocket(url, { headers });
       socket.once("unexpected-response", (_request, response) => {
@@ -83,7 +87,7 @@ async function probeDeniedSocket(
         const location = response.headers.location;
         resolveStatus({
           status: response.statusCode ?? 0,
-          ...(location === undefined ? {} : { location }),
+          location,
         });
       });
       socket.once("open", () => {
@@ -126,7 +130,7 @@ async function verifyBrowser(
       await page.getByText(event.type, { exact: true }).last().click();
       const payload = await page.getByLabel("Event payload").textContent();
       const marker = JSON.stringify(event.payload).match(/relay-e2e-[^"\\]+/u)?.[0];
-      if (marker === undefined || !payload?.includes(marker)) {
+      if (marker == null || !payload?.includes(marker)) {
         throw new Error(`Chromium did not display event ${event.id}.`);
       }
     }
@@ -151,7 +155,7 @@ async function verifyBrowser(
     await comments.nth(priorCommentCount).click();
     const livePayload = await page.getByLabel("Event payload").textContent();
     const liveMarker = JSON.stringify(live.payload).match(/relay-e2e-[^"\\]+/u)?.[0];
-    if (liveMarker === undefined || !livePayload?.includes(liveMarker)) {
+    if (liveMarker == null || !livePayload?.includes(liveMarker)) {
       throw new Error(`Chromium did not display live event ${live.id}.`);
     }
   } finally {
@@ -208,7 +212,7 @@ async function openTool(
 }
 
 function parseWatchResult(input: unknown): WatchResult {
-  if (typeof input !== "object" || input === null || !("type" in input)) {
+  if (typeof input !== "object" || input == null || !("type" in input)) {
     throw new Error("The watch tool returned an invalid result.");
   }
   if (input.type === "timeout") return { type: "timeout" };

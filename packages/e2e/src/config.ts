@@ -1,7 +1,7 @@
 import { Parsers, type LiveE2eConfig } from "@github-webhook-relay/core";
 
 export function readConfig(
-  environment: Readonly<Record<string, string | undefined>>,
+  environment: Readonly<Record<string, string | null | undefined>>,
 ): LiveE2eConfig {
   return Parsers.LiveE2eConfig.parse({
     relayUrl: environment.RELAY_URL,

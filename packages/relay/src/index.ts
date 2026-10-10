@@ -117,7 +117,7 @@ export class EventRelay extends DurableObject<RelayEnv> {
 
   override webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
     const timer = this.#subscriptionTimers.get(socket);
-    if (timer !== undefined) {
+    if (timer != null) {
       clearTimeout(timer);
       this.#subscriptionTimers.delete(socket);
     }
@@ -166,7 +166,7 @@ export class EventRelay extends DurableObject<RelayEnv> {
 
   #clearTimer(socket: WebSocket): void {
     const timer = this.#subscriptionTimers.get(socket);
-    if (timer !== undefined) clearTimeout(timer);
+    if (timer != null) clearTimeout(timer);
     this.#subscriptionTimers.delete(socket);
   }
 }
@@ -254,7 +254,7 @@ export async function handleRelayRequest(
       },
       request,
     );
-    if (principal === undefined) {
+    if (principal == null) {
       return Response.json(
         {
           error: {
@@ -294,10 +294,10 @@ function createEntryCapabilities(assets: Fetcher): Capabilities<EntryCapability>
       verify: crypto.subtle.verify.bind(crypto.subtle),
     },
     accessKeyStore: {
-      read: async (url: string): Promise<unknown | undefined> => {
+      read: async (url: string): Promise<unknown | null | undefined> => {
         const cache = await caches.open("access-signing-keys");
         const response = await cache.match(new Request(url));
-        return response === undefined ? undefined : response.json();
+        return response == null ? undefined : response.json();
       },
       write: async (url: string, value: unknown): Promise<void> => {
         const cache = await caches.open("access-signing-keys");

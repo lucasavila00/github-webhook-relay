@@ -60,7 +60,7 @@ export async function ingestGitHubWebhook(
 ): Promise<Response> {
   const body = await request.arrayBuffer();
   const signature = parseSignature(request.headers.get("x-hub-signature-256"));
-  if (signature === undefined) {
+  if (signature == null) {
     return errorResponse(401, "unauthorized", "Unauthorized.");
   }
 
@@ -69,13 +69,13 @@ export async function ingestGitHubWebhook(
   }
 
   const payload = parseJsonObject(body);
-  if (payload === undefined) {
+  if (payload == null) {
     return errorResponse(400, "invalid_request", "Invalid request.");
   }
 
   const deliveryId = request.headers.get("x-github-delivery");
   const githubEvent = request.headers.get("x-github-event");
-  if (deliveryId === null || deliveryId.length === 0 || githubEvent === null || githubEvent.length === 0) {
+  if (deliveryId == null || deliveryId.length === 0 || githubEvent == null || githubEvent.length === 0) {
     return errorResponse(400, "invalid_request", "Invalid request.");
   }
 
@@ -121,7 +121,7 @@ export function selectGitHubEvent(
   }
 
   const type = selectedType(githubEvent, actionResult.data.action);
-  if (type === undefined) {
+  if (type == null) {
     return { kind: "ignored" };
   }
 
@@ -155,12 +155,12 @@ export function validateCursor(
   value: string,
 ): boolean {
   const match = /^cursor_(0|[1-9][0-9]*)$/.exec(value);
-  if (match === null) {
+  if (match == null) {
     return false;
   }
   const position = match[1];
   return position === "0" ||
-    (position !== undefined && capabilities.eventStore.hasPosition(position));
+    (position != null && capabilities.eventStore.hasPosition(position));
 }
 
 export function createCryptography(secret: string): Cryptography {
@@ -178,13 +178,13 @@ export function createCryptography(secret: string): Cryptography {
   };
 }
 
-function parseSignature(value: string | null): Uint8Array<ArrayBuffer> | undefined {
+function parseSignature(value: string | null | undefined): Uint8Array<ArrayBuffer> | null | undefined {
   const match = /^sha256=([0-9a-fA-F]{64})$/.exec(value ?? "");
-  if (match === null) {
+  if (match == null) {
     return undefined;
   }
   const hex = match[1];
-  if (hex === undefined) {
+  if (hex == null) {
     return undefined;
   }
   const bytes = new Uint8Array(32);
@@ -196,7 +196,7 @@ function parseSignature(value: string | null): Uint8Array<ArrayBuffer> | undefin
 
 function parseJsonObject(
   body: ArrayBuffer,
-): Readonly<Record<string, unknown>> | undefined {
+): Readonly<Record<string, unknown>> | null | undefined {
   try {
     const value: unknown = JSON.parse(decoder.decode(body));
     return isJsonObject(value) ? value : undefined;
@@ -206,10 +206,10 @@ function parseJsonObject(
 }
 
 function isJsonObject(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value != null && !Array.isArray(value);
 }
 
-function selectedType(githubEvent: string, action: string): EventType | undefined {
+function selectedType(githubEvent: string, action: string): EventType | null | undefined {
   if (githubEvent === "issues" && action === "opened") return "issues";
   if (githubEvent === "issue_comment" && action === "created") return "issue_comment";
   if (githubEvent === "pull_request_review_comment" && action === "created") {

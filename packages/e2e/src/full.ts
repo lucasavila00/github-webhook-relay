@@ -38,7 +38,7 @@ await capabilities.browser.verify(
 );
 
 const issueDelivery = events.find(({ type }) => type === "issues");
-if (issueDelivery === undefined) throw new Error("The issue event is missing.");
+if (issueDelivery == null) throw new Error("The issue event is missing.");
 const deliveryId = await redeliverIssueEvent(
   capabilities,
   config,

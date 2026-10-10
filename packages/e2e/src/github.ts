@@ -2,10 +2,6 @@ import type { Capabilities } from "@beff/diy/capabilities";
 import {
   Parsers,
   type GitHubE2eDelivery,
-  type GitHubE2eIssue,
-  type GitHubE2ePullRequest,
-  type GitHubE2eReference,
-  type GitHubE2eRepository,
   type LiveE2eConfig,
 } from "@github-webhook-relay/core";
 
@@ -95,7 +91,7 @@ export async function redeliverIssueEvent(
 ): Promise<string> {
   const deliveries = await readDeliveries(capabilities, config);
   const delivery = deliveries.find(({ guid }) => guid === deliveryId);
-  if (delivery === undefined) throw new Error("No issue delivery is available.");
+  if (delivery == null) throw new Error("No issue delivery is available.");
   await github(
     capabilities,
     config,

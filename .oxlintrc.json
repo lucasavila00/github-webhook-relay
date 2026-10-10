@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    "**/generated/**",
+    "plugins/**/dist/**",
+    "**/worker-configuration.d.ts",
+    "**/node_modules/**"
+  ],
+  "jsPlugins": ["./oxlint-plugin-local.mjs"],
+  "rules": {
+    "local/no-incomplete-nullish-types": "error",
+    "local/no-nullish-coalesce-noop": "error",
+    "local/no-strict-nullish-comparison": "error"
+  }
+}

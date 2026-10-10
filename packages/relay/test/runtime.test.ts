@@ -58,8 +58,8 @@ const accessCapabilities = Capabilities.create<
     verify: crypto.subtle.verify.bind(crypto.subtle),
   },
   accessKeyStore: {
-    read: (url: string): Promise<unknown | undefined> =>
-      runInDurableObject<EventRelay, unknown | undefined>(
+    read: (url: string): Promise<unknown | null | undefined> =>
+      runInDurableObject<EventRelay, unknown | null | undefined>(
         accessKeyStoreStub(),
         (_instance, state) => state.storage.get(url),
       ),
@@ -161,7 +161,7 @@ describe.sequential("GitHub webhook ingestion", () => {
         "x-github-delivery": "unauthorized-1",
         "x-github-event": "issues",
       });
-      if (signature !== undefined) requestHeaders.set("x-hub-signature-256", signature);
+      if (signature != null) requestHeaders.set("x-hub-signature-256", signature);
 
       const response = await SELF.fetch("https://relay.test/webhooks/github", {
         method: "POST",
@@ -1028,7 +1028,7 @@ async function createSigningKeys(): Promise<SigningKeys> {
     ["sign", "verify"],
   );
   const exported = await crypto.subtle.exportKey("jwk", pair.publicKey);
-  if (exported.e === undefined || exported.n === undefined) {
+  if (exported.e == null || exported.n == null) {
     throw new Error("The generated test key is not an RSA key.");
   }
   return {
@@ -1108,7 +1108,7 @@ async function openStream(access: AccessSession): Promise<WebSocket> {
       },
     }),
   );
-  if (response.status !== 101 || response.webSocket === null) {
+  if (response.status !== 101 || response.webSocket == null) {
     throw new Error(`WebSocket upgrade failed with status ${response.status}.`);
   }
   response.webSocket.accept();

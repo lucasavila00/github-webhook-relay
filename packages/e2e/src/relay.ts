@@ -35,7 +35,7 @@ export async function waitForEvent(
   while (capabilities.clock.now().getTime() < deadline) {
     const event = (await readAllEvents(capabilities, config))
       .find(({ payload }) => JSON.stringify(payload).includes(marker));
-    if (event !== undefined) return event;
+    if (event != null) return event;
     await capabilities.clock.sleep(2_000);
   }
   throw new Error("The live GitHub event did not reach the relay in two minutes.");
@@ -46,12 +46,12 @@ export async function readAllEvents(
   config: LiveE2eConfig,
 ): Promise<ReadonlyArray<Event>> {
   let events: ReadonlyArray<Event> = [];
-  let after: string | undefined;
+  let after: string | null | undefined;
   for (;;) {
     const url = new URL("/api/events", config.relayUrl);
     url.searchParams.set("repository", config.githubRepository);
     url.searchParams.set("limit", "1000");
-    if (after !== undefined) url.searchParams.set("after", after);
+    if (after != null) url.searchParams.set("after", after);
     const response = await capabilities.http.fetch(url, {
       headers: accessHeaders(config),
     });

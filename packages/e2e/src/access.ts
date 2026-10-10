@@ -50,7 +50,7 @@ async function expectLoginRedirect(
   const location = response.headers.get("location");
   if (
     response.status !== 302 ||
-    location === null ||
+    location == null ||
     !new URL(location).pathname.includes("/cdn-cgi/access/login")
   ) {
     throw new Error(`Access login request returned ${response.status}.`);
@@ -78,7 +78,7 @@ async function expectSocketLoginRedirect(
   const response = await capabilities.socketProbe.deniedStatus(relayUrl, {});
   if (
     response.status !== 302 ||
-    response.location === undefined ||
+    response.location == null ||
     !new URL(response.location).pathname.includes("/cdn-cgi/access/login")
   ) {
     throw new Error(`Access WebSocket login returned ${response.status}.`);
