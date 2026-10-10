@@ -29,7 +29,9 @@ agents. Move the requested work to review without unnecessary waiting.
   This repository squash-merges pull requests. Merge `main` only when GitHub
   reports a conflict, and preserve both sides of the conflict.
 - Do not use a GitLab-style merge train that repeatedly merges the latest
-  `main` into every open pull request. Review each clean pull request and use hosted CI for validation. Run the full tests again on the combined `main` branch
+  `main` into every open pull request. Review each clean pull request and use
+  hosted CI for validation. Run the full tests again on the combined `main`
+  branch
   before publishing.
 - Keep a pull request in draft while implementation, conflict resolution,
   review, or required CI is incomplete.
