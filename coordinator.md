@@ -1,0 +1,1 @@
+Continuously coordinate implementation of every open TGo issue that lacks a pull request, following [the coordinator workflow](docs/contrib/agent-coordination.md); keep at most six open pull requests, keep active or conflicting work in draft, require independent review and exact-head CI, and mark a pull request ready only when Lucas must review and merge it.
