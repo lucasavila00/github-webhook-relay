@@ -13,11 +13,11 @@ export {
   type EventPage,
   type EventQuery,
   type EventType,
+  type HttpError,
   type GitHubActionPayload,
   type GitHubPullRequestPayload,
   type GitHubPullRequestSelection,
   type GitHubRepositoryPayload,
-  type HttpError,
   type LocalConfig,
   type NonEmptyString,
   type PublicError,
@@ -36,13 +36,12 @@ import type {
   EventLimit,
   EventPage,
   EventQuery,
-  EventType,
 } from "./parser.ts";
 import { Parsers } from "./parser.ts";
 
 export type StoredDelivery = Readonly<{
   deliveryId: string;
-  eventType: EventType;
+  eventType: Event["type"];
   repository: string;
   receivedAt: string;
   payload: ArrayBuffer;

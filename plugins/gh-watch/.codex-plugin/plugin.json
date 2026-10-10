@@ -1,0 +1,7 @@
+{
+  "name": "gh-watch",
+  "version": "0.1.0",
+  "description": "Watch GitHub relay events in the current Codex session.",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

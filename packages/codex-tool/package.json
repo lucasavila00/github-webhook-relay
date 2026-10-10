@@ -1,0 +1,24 @@
+{
+  "name": "@github-webhook-relay/codex-tool",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "pnpm run build",
+    "build": "esbuild src/main.ts --bundle --minify --platform=node --format=esm --target=node22 --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=../../plugins/gh-watch/dist/server.mjs",
+    "check": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@beff/diy": "0.0.33",
+    "@github-webhook-relay/core": "workspace:*",
+    "@github-webhook-relay/local": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.0"
+  }
+}
