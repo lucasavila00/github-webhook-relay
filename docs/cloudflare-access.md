@@ -93,6 +93,9 @@ Allow policy to revoke browser access.
 
 ## Real provider check
 
+Deploy the event history and WebSocket stream from issues #11 and #12 before
+you run this check.
+
 Set these environment variables after deployment:
 
 ```sh
