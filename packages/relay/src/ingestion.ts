@@ -1,14 +1,13 @@
 import type { Capability, Capabilities } from "@beff/diy/capabilities";
 import {
   Parsers,
+  type ErrorCode,
+  type EventType,
+  type HttpError,
   type StoredDelivery,
 } from "@github-webhook-relay/core";
-import type {
-  ErrorCode,
-  EventType,
-  HttpError,
-} from "@github-webhook-relay/core";
 
+export type { StoredDelivery } from "@github-webhook-relay/core";
 
 type Cryptography = Readonly<{
   verify: (body: ArrayBuffer, signature: Uint8Array<ArrayBuffer>) => Promise<boolean>;

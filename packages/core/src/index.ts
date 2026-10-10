@@ -31,6 +31,7 @@ export {
   type PublicError,
   type RawEventQuery,
   type PendingBatch,
+  type RawEventQuery,
   type StreamMessage,
   type StreamAttachmentData,
   type Subscribe,

@@ -106,3 +106,19 @@ Local integration tests use a real Worker, Durable Object, WebSocket, and
 generated Access JWT. A separate real socket test verifies the service-token
 headers from the production adapter. Hosted end-to-end validation must verify
 the actual Cloudflare Access service-token exchange.
+
+An optional Codex smoke test installs the plugin in an isolated `CODEX_HOME`.
+It uses the installed manifest and skill, Codex tool discovery, the production
+MCP handlers, and a real local Worker. A test entry injects the generated
+origin JWT into the production socket capability. The test verifies repeated
+delivery, explicit acknowledgement, a later timeout, and the saved
+`cursor_1` checkpoint. It does not replace or test the Cloudflare Access edge.
+
+Run it with an existing Codex login file:
+
+```sh
+RUN_CODEX_PLUGIN_SMOKE=1 \
+CODEX_AUTH_FILE="$CODEX_HOME/auth.json" \
+pnpm --filter @github-webhook-relay/codex-tool exec vitest run \
+  test/worker-integration.test.ts -t 'installed Codex'
+```

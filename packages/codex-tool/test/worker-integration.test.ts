@@ -1,10 +1,18 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { once } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import {
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { createServer as createHttpServer, request, type Server as HttpServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 
 import { Capabilities } from "@beff/diy/capabilities";
 import {
@@ -22,12 +30,118 @@ import type { LocalClientCapability } from "../src/capabilities.ts";
 import { createServer } from "../src/server.ts";
 
 const cleanups: Array<() => Promise<void>> = [];
+const execute = promisify(execFile);
 
 afterEach(async () => {
   while (cleanups.length > 0) await cleanups.pop()?.();
 });
 
 describe("MCP tools with the relay Worker", () => {
+  it.runIf(process.env.RUN_CODEX_PLUGIN_SMOKE === "1")(
+    "runs the installed Codex tool path with an injected origin identity",
+    async () => {
+      const keys = await createSigningKeys();
+      const keyServer = await startKeyServer(keys.publicJwk);
+      const token = await signAccessToken(keys, {
+        aud: "test-audience",
+        exp: Math.floor(Date.now() / 1_000) + 300,
+        iss: keyServer.url,
+        sub: "codex-tool-test",
+      });
+      const worker = await startWorker(keyServer.url);
+      const stateDirectory = await temporaryDirectory("gh-watch-codex-state-");
+      const codexHome = await temporaryDirectory("gh-watch-codex-home-");
+      const authFile = process.env.CODEX_AUTH_FILE;
+      if (authFile === undefined) throw new Error("CODEX_AUTH_FILE is required.");
+      await symlink(authFile, join(codexHome, "auth.json"));
+
+      await execute("codex", [
+        "plugin",
+        "marketplace",
+        "add",
+        resolve("../.."),
+        "--json",
+      ], { env: { ...process.env, CODEX_HOME: codexHome } });
+      await execute("codex", [
+        "plugin",
+        "add",
+        "gh-watch@github-webhook-relay",
+        "--json",
+      ], { env: { ...process.env, CODEX_HOME: codexHome } });
+
+      const installed = join(
+        codexHome,
+        "plugins/cache/github-webhook-relay/gh-watch/0.1.0",
+      );
+      const manifestPath = join(installed, ".mcp.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+        mcpServers: { gh_watch: { env_vars: Array<string> } };
+      };
+      manifest.mcpServers.gh_watch.env_vars.push(
+        "GH_WATCH_ACCESS_JWT_ASSERTION",
+      );
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+      const entry = join(codexHome, "origin-entry.ts");
+      await writeFile(entry, originEntry(resolve("../..")));
+      await execute(
+        resolve("node_modules/.bin/esbuild"),
+        [
+          entry,
+          "--bundle",
+          "--platform=node",
+          "--format=esm",
+          "--target=node22",
+          "--banner:js=import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+          `--outfile=${join(installed, "dist/server.mjs")}`,
+        ],
+        { env: { ...process.env, NODE_PATH: resolve("node_modules") } },
+      );
+
+      const body = JSON.stringify({
+        action: "opened",
+        repository: { full_name: "owner/repository" },
+        issue: { number: 1 },
+      });
+      expect(await sendWebhook(worker.port, token, body)).toBe(202);
+
+      const output = await runCodex(
+        [
+          "exec",
+          "--dangerously-bypass-approvals-and-sandbox",
+          "--skip-git-repo-check",
+          "--json",
+          "Call gh_watch watch twice with consumer codex-harness, repository owner/repository, type issues, and waitMilliseconds 5000. Confirm both batches contain tool-delivery. Acknowledge the second batch with its exact opaque value. Then call watch once with the same consumer and filters and waitMilliseconds 100. Report the three result types.",
+        ],
+        {
+          cwd: codexHome,
+          env: {
+            ...process.env,
+            CODEX_HOME: codexHome,
+            GH_WATCH_RELAY_URL: `http://127.0.0.1:${worker.port}`,
+            GH_WATCH_STATE_DIRECTORY: stateDirectory,
+            CF_ACCESS_CLIENT_ID: "service-id",
+            CF_ACCESS_CLIENT_SECRET: "service-secret",
+            GH_WATCH_ACCESS_JWT_ASSERTION: token,
+          },
+        },
+      );
+      expect(output).toContain('"deliveryId":"tool-delivery"');
+      expect(output).toContain('"type":"acknowledged"');
+      expect(output).toContain('"type":"timeout"');
+      const stateFiles = (await readdir(stateDirectory)).filter((file) =>
+        file.endsWith(".json"),
+      );
+      expect(stateFiles).toHaveLength(1);
+      const state = JSON.parse(
+        await readFile(join(stateDirectory, stateFiles[0]!), "utf8"),
+      ) as { acknowledged?: string; pending?: unknown };
+      expect(state).toMatchObject({ acknowledged: "cursor_1" });
+      expect(state.pending).toBeUndefined();
+    },
+    120_000,
+  );
+
   it(
     "repeats, acknowledges, and advances an actual relay batch",
     async () => {
@@ -129,6 +243,52 @@ describe("MCP tools with the relay Worker", () => {
     30_000,
   );
 });
+
+function originEntry(repo: string): string {
+  return `
+import process from "node:process";
+import { Capabilities } from "@beff/diy/capabilities";
+import { acknowledgeEvents, createNodeCapabilities, watchEvents } from "${repo}/packages/local/src/index.ts";
+import { createSocketService } from "${repo}/packages/local/src/adapters.ts";
+import { createServer } from "${repo}/packages/codex-tool/src/server.ts";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+const base = createNodeCapabilities({
+  relayUrl: process.env.GH_WATCH_RELAY_URL,
+  stateDirectory: process.env.GH_WATCH_STATE_DIRECTORY,
+  accessClientId: process.env.CF_ACCESS_CLIENT_ID,
+  accessClientSecret: process.env.CF_ACCESS_CLIENT_SECRET,
+});
+const local = Capabilities.create({
+  ...base,
+  network: createSocketService({
+    "Cf-Access-Jwt-Assertion": process.env.GH_WATCH_ACCESS_JWT_ASSERTION,
+  }),
+});
+const capabilities = Capabilities.create({
+  localClient: {
+    watch: (input) => watchEvents(local, input),
+    acknowledge: (value) => acknowledgeEvents(local, value),
+  },
+});
+await createServer(capabilities).connect(new StdioServerTransport());
+`;
+}
+
+async function runCodex(
+  args: ReadonlyArray<string>,
+  options: Readonly<{ cwd: string; env: NodeJS.ProcessEnv }>,
+): Promise<string> {
+  const child = spawn("codex", args, { ...options, stdio: ["ignore", "pipe", "pipe"] });
+  let output = "";
+  child.stdout.on("data", (chunk: Buffer) => {
+    output += chunk.toString();
+    process.stderr.write(chunk);
+  });
+  child.stderr.on("data", (chunk: Buffer) => process.stderr.write(chunk));
+  const [status] = (await once(child, "close")) as [number];
+  if (status !== 0) throw new Error(`Codex exited with status ${status}.`);
+  return output;
+}
 
 async function startWorker(teamDomain: string): Promise<Readonly<{ port: number }>> {
   const port = await unusedPort();

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "generate": "pnpm run build",
-    "build": "esbuild src/server.ts --bundle --minify --platform=node --format=esm --target=node22 --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=../../plugins/gh-watch/dist/server.mjs",
+    "build": "esbuild src/main.ts --bundle --minify --platform=node --format=esm --target=node22 --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=../../plugins/gh-watch/dist/server.mjs",
     "check": "tsc -p tsconfig.json",
     "test": "vitest run"
   },

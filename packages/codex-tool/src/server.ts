@@ -1,7 +1,3 @@
-import process from "node:process";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { Capabilities, type Capability } from "@beff/diy/capabilities";
 import {
   acknowledgeEvents,
@@ -63,11 +59,4 @@ export async function runServer(
   });
   const server = createServer(createToolCapabilities(environmentCapabilities));
   await server.connect(new StdioServerTransport());
-}
-
-if (
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === resolve(process.argv[1])
-) {
-  await runServer(process.env);
 }
