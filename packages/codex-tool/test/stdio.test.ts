@@ -30,7 +30,7 @@ describe("compiled stdio server", () => {
     clients.push(client);
     const transport = new StdioClientTransport({
       command: process.execPath,
-      args: [resolve("../../plugins/gh-watch/dist/server.mjs")],
+      args: ["./dist/server.mjs"],
       cwd: resolve("../../plugins/gh-watch"),
       env: {
         ...getDefaultEnvironment(),

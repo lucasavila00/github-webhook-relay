@@ -1,8 +1,0 @@
-{
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  "name": "gh-watch",
-  "version": "0.1.0",
-  "description": "Watch GitHub relay events in the current Codex session.",
-  "repository": "https://github.com/lucasavila00/github-webhook-relay",
-  "license": "MIT"
-}

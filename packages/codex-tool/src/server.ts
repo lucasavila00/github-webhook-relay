@@ -1,4 +1,6 @@
 import process from "node:process";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { Capabilities, type Capability } from "@beff/diy/capabilities";
 import {
@@ -63,6 +65,9 @@ export async function runServer(
   await server.connect(new StdioServerTransport());
 }
 
-if (process.argv[1] !== undefined && import.meta.url === new URL(process.argv[1], "file:").href) {
+if (
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === resolve(process.argv[1])
+) {
   await runServer(process.env);
 }

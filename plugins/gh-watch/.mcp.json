@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "gh_watch": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["./dist/server.mjs"],
+      "cwd": ".",
+      "env_vars": [
+        "GH_WATCH_RELAY_URL",
+        "GH_WATCH_STATE_DIRECTORY",
+        "CF_ACCESS_CLIENT_ID",
+        "CF_ACCESS_CLIENT_SECRET"
+      ]
+    }
+  }
+}
