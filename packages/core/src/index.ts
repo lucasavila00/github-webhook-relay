@@ -19,6 +19,7 @@ export {
   type NonEmptyString,
   type PublicError,
   type RawEventQuery,
+  type StreamAttachmentData,
   type StreamMessage,
   type Subscribe,
 } from "./parser.ts";
