@@ -6,11 +6,12 @@ protected workflows pass after they reach the default branch.
 
 ## Cloudflare setup
 
-Use [Getting started](getting-started.md) for the first local client and
-[Deployment](deployment.md) for the complete Cloudflare and GitHub setup. The
-deployment uses two role-specific Workers and two custom hostnames. The small
-ingress Worker accepts only `POST /webhooks/github` and sends the request to
-the existing `EventRelay` Durable Object in the relay Worker. The relay Worker
+Use `docs/getting-started.md` for the first local client and
+`docs/deployment.md` for the complete Cloudflare and GitHub setup after those
+guides are available. The deployment uses two role-specific Workers and two
+custom hostnames. The ingress Worker accepts only `POST /webhooks/github` and
+sends the request to the existing `EventRelay` Durable Object in the relay
+Worker. The relay Worker
 serves the browser, history API, and WebSocket API behind Cloudflare Access.
 Do not put the webhook hostname in the Access application and do not add an
 Access bypass path. Workers.dev and preview URLs stay disabled for both
