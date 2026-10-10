@@ -1,5 +1,8 @@
 export {
   Parsers,
+  type AccessJwtHeader,
+  type AccessJwtPayload,
+  type AccessKeySet,
   type Cursor,
   type ErrorCode,
   type Event,

@@ -26,9 +26,17 @@ export type GitHubPullRequestSelection = Readonly<{
   }>;
 }>;
 
+export type RawEventQuery = Readonly<{
+  after?: string;
+  limit?: string;
+  repository?: string;
+  type?: string;
+}>;
+
 export const GitHubParsers = parse.buildParsers<{
   GitHubActionPayload: GitHubActionPayload;
   GitHubRepositoryPayload: GitHubRepositoryPayload;
   GitHubPullRequestPayload: GitHubPullRequestPayload;
   GitHubPullRequestSelection: GitHubPullRequestSelection;
+  RawEventQuery: RawEventQuery;
 }>();

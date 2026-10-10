@@ -45,7 +45,7 @@ Example response:
 {
   "events": [
     {
-      "id": "42",
+      "id": "event_42",
       "deliveryId": "github-delivery-id",
       "type": "issues",
       "repository": "owner/repo",
@@ -53,7 +53,7 @@ Example response:
       "payload": {}
     }
   ],
-  "cursor": "42",
+  "cursor": "cursor_42",
   "hasMore": false
 }
 ```
@@ -70,7 +70,7 @@ shape.
 ```json
 {
   "type": "subscribe",
-  "after": "42",
+  "after": "cursor_42",
   "filters": {"repository": "owner/repo", "type": "issues"}
 }
 ```
@@ -88,10 +88,10 @@ work. Each consumer keeps its own cursor.
 
 ### Authentication and errors
 
-Event history and subscriptions require authentication. The webapp server
-must authorize access, and the local client needs a credential that can be
-revoked. The sign-in provider, client pairing flow, credential transport,
-and access scope remain open decisions.
+Event history and subscriptions require Cloudflare Access authentication. The
+Worker verifies the Access JWT signature, issuer, audience, and expiry before
+it forwards a request to the event relay. It accepts an identity principal or
+a service-token principal.
 
 HTTP errors use a JSON body with `error.code` and `error.message`. Invalid
 input uses status 400. Application authentication failures use status 401 or
