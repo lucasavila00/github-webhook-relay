@@ -12,12 +12,14 @@ import {
   StdioClientTransport,
 } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { chromium } from "playwright";
+import WebSocket from "ws";
 
 import type {
   BrowserCapability,
   ClockCapability,
   HttpCapability,
   OutputCapability,
+  SocketProbeCapability,
   ToolCapability,
   ToolSession,
 } from "./capabilities.ts";
@@ -27,6 +29,7 @@ type AdapterCapabilities =
   | ClockCapability
   | HttpCapability
   | OutputCapability
+  | SocketProbeCapability
   | ToolCapability;
 
 export function createAdapters(
@@ -42,6 +45,7 @@ export function createAdapters(
   };
   return Capabilities.create<AdapterCapabilities>({
     http: { fetch: globalThis.fetch.bind(globalThis) },
+    socketProbe: { deniedStatus: probeDeniedSocket },
     clock: {
       now: () => new Date(),
       sleep: (milliseconds) =>
@@ -63,6 +67,32 @@ export function createAdapters(
     },
     output: { write: (value) => process.stdout.write(`${value}\n`) },
   });
+}
+
+async function probeDeniedSocket(
+  relayUrl: string,
+  headers: Readonly<Record<string, string>>,
+): Promise<Readonly<{ status: number; location?: string }>> {
+  const url = new URL("/api/events/stream", relayUrl);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return await new Promise<Readonly<{ status: number; location?: string }>>(
+    (resolveStatus, reject) => {
+      const socket = new WebSocket(url, { headers });
+      socket.once("unexpected-response", (_request, response) => {
+        response.resume();
+        const location = response.headers.location;
+        resolveStatus({
+          status: response.statusCode ?? 0,
+          ...(location === undefined ? {} : { location }),
+        });
+      });
+      socket.once("open", () => {
+        socket.close();
+        reject(new Error("Denied WebSocket opened."));
+      });
+      socket.once("error", reject);
+    },
+  );
 }
 
 async function verifyBrowser(

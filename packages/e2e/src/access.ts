@@ -1,41 +1,63 @@
 import type { Capabilities } from "@beff/diy/capabilities";
 import type { LiveE2eConfig } from "@github-webhook-relay/core";
-import WebSocket from "ws";
 
-import type { HttpCapability } from "./capabilities.ts";
+import type {
+  HttpCapability,
+  SocketProbeCapability,
+} from "./capabilities.ts";
 import { accessHeaders } from "./relay.ts";
 
+type AccessCapabilities = HttpCapability | SocketProbeCapability;
+
 export async function verifyDeniedAccess(
-  capabilities: Capabilities<HttpCapability>,
+  capabilities: Capabilities<AccessCapabilities>,
   config: LiveE2eConfig,
 ): Promise<void> {
-  await expectHttpDenied(capabilities, config.relayUrl, {});
-  await expectHttpDenied(capabilities, config.relayUrl, {
+  await expectLoginRedirect(capabilities, config.relayUrl);
+  await expectHttpForbidden(capabilities, config.relayUrl, {
     "CF-Access-Client-Id": "invalid",
     "CF-Access-Client-Secret": "invalid",
   });
-  await expectSocketDenied(config.relayUrl, {});
-  await expectSocketDenied(config.relayUrl, {
+  await expectSocketLoginRedirect(capabilities, config.relayUrl);
+  await expectSocketForbidden(capabilities, config.relayUrl, {
     "CF-Access-Client-Id": "invalid",
     "CF-Access-Client-Secret": "invalid",
   });
-  await expectHttpDenied(capabilities, config.alternateRelayUrl, {});
-  await expectSocketDenied(
+  await expectHttpForbidden(capabilities, config.alternateRelayUrl, {});
+  await expectSocketForbidden(
+    capabilities,
     config.alternateRelayUrl,
     accessHeaders(config),
   );
 }
 
 export async function verifyRevokedAccess(
-  capabilities: Capabilities<HttpCapability>,
+  capabilities: Capabilities<AccessCapabilities>,
   config: LiveE2eConfig,
 ): Promise<void> {
   const headers = accessHeaders(config);
-  await expectHttpDenied(capabilities, config.relayUrl, headers);
-  await expectSocketDenied(config.relayUrl, headers);
+  await expectHttpForbidden(capabilities, config.relayUrl, headers);
+  await expectSocketForbidden(capabilities, config.relayUrl, headers);
 }
 
-async function expectHttpDenied(
+async function expectLoginRedirect(
+  capabilities: Capabilities<HttpCapability>,
+  relayUrl: string,
+): Promise<void> {
+  const response = await capabilities.http.fetch(new URL("/api/events", relayUrl), {
+    redirect: "manual",
+  });
+  const location = response.headers.get("location");
+  if (
+    response.status !== 302 ||
+    location === null ||
+    !new URL(location).pathname.includes("/cdn-cgi/access/login")
+  ) {
+    throw new Error(`Access login request returned ${response.status}.`);
+  }
+}
+
+async function expectHttpForbidden(
   capabilities: Capabilities<HttpCapability>,
   relayUrl: string,
   headers: Readonly<Record<string, string>>,
@@ -44,31 +66,32 @@ async function expectHttpDenied(
     headers,
     redirect: "manual",
   });
-  if (response.status < 400) {
-    throw new Error(`Denied HTTP request returned ${response.status}.`);
+  if (response.status !== 403) {
+    throw new Error(`Forbidden HTTP request returned ${response.status}.`);
   }
 }
 
-async function expectSocketDenied(
+async function expectSocketLoginRedirect(
+  capabilities: Capabilities<SocketProbeCapability>,
+  relayUrl: string,
+): Promise<void> {
+  const response = await capabilities.socketProbe.deniedStatus(relayUrl, {});
+  if (
+    response.status !== 302 ||
+    response.location === undefined ||
+    !new URL(response.location).pathname.includes("/cdn-cgi/access/login")
+  ) {
+    throw new Error(`Access WebSocket login returned ${response.status}.`);
+  }
+}
+
+async function expectSocketForbidden(
+  capabilities: Capabilities<SocketProbeCapability>,
   relayUrl: string,
   headers: Readonly<Record<string, string>>,
 ): Promise<void> {
-  const url = new URL("/api/events/stream", relayUrl);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  await new Promise<void>((resolve, reject) => {
-    const socket = new WebSocket(url, { headers });
-    socket.once("unexpected-response", (_request, response) => {
-      response.resume();
-      if ((response.statusCode ?? 0) < 400) {
-        reject(new Error(`Denied WebSocket returned ${response.statusCode}.`));
-      } else {
-        resolve();
-      }
-    });
-    socket.once("open", () => {
-      socket.close();
-      reject(new Error("Denied WebSocket opened."));
-    });
-    socket.once("error", reject);
-  });
+  const response = await capabilities.socketProbe.deniedStatus(relayUrl, headers);
+  if (response.status !== 403) {
+    throw new Error(`Forbidden WebSocket returned ${response.status}.`);
+  }
 }

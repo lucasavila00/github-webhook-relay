@@ -5,6 +5,15 @@ export type HttpCapability = Capability<
   "http",
   Readonly<{ fetch: typeof globalThis.fetch }>
 >;
+export type SocketProbeCapability = Capability<
+  "socketProbe",
+  Readonly<{
+    deniedStatus: (
+      url: string,
+      headers: Readonly<Record<string, string>>,
+    ) => Promise<Readonly<{ status: number; location?: string }>>;
+  }>
+>;
 export type ClockCapability = Capability<
   "clock",
   Readonly<{

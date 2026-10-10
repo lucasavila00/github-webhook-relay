@@ -44,7 +44,9 @@ jobs:
       - if: inputs.mode == 'full'
         run: pnpm --filter @github-webhook-relay/e2e exec playwright install --with-deps chromium
       - name: Run the real-resource proof
-        run: pnpm --filter @github-webhook-relay/e2e run ${{ inputs.mode }} > live-e2e-report.json
+        run: >-
+          pnpm --silent --filter @github-webhook-relay/e2e
+          run ${{ inputs.mode }} > live-e2e-report.json
       - uses: actions/upload-artifact@v7
         with:
           name: live-e2e-report-${{ github.sha }}-${{ inputs.mode }}

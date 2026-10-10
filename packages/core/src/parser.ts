@@ -130,6 +130,7 @@ export type LiveE2eReport = Readonly<{
   testedCommit: NonEmptyString;
   actionsRunUrl: NonEmptyString;
   repository: NonEmptyString;
+  dependencyCommits: ReadonlyArray<NonEmptyString>;
   eventTypes: ReadonlyArray<EventType>;
   browserVerified: true;
   duplicateVerified: true;

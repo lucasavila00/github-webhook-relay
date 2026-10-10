@@ -20,7 +20,10 @@ Give only this path an Everyone Bypass policy. Add no other bypass path. Also
 attach Access to the Worker URL so alternate and preview URLs cannot bypass the
 custom-host policy. No Cloudflare Tunnel is necessary.
 
-Create the GitHub `production` environment. Add these secrets:
+Create the GitHub `production` environment. Configure its deployment
+protection rules to require Lucas as a reviewer. Keep self-review enabled
+because Lucas is the only user. Thus, each `Deploy` and `Live E2E` run pauses
+for explicit production approval. Add these secrets:
 
 ```text
 CLOUDFLARE_API_TOKEN  CLOUDFLARE_ACCOUNT_ID  GITHUB_WEBHOOK_SECRET
@@ -124,8 +127,8 @@ recovery for storage damage. Restore a local consumer by keeping its state file
 or by using its backup. Loss of that file starts replay at retained history.
 
 Event rows have no TTL, cleanup job, or automatic expiration. On 2026-10-10,
-the official [Durable Objects limits] listed 1 GB per SQLite object on Free,
-10 GB per object on Paid, 5 GB total on
+the official Durable Objects limits page listed 1 GB per SQLite object on
+Free, 10 GB per object on Paid, 5 GB total on
 Free, a soft 1,000 requests per second for one object, 32 MiB received
 WebSocket messages, and 30 seconds of CPU per request by default. The Paid
 SQLite account total is unlimited, but one object is not. Check the linked
@@ -133,7 +136,7 @@ page and the deployed plan before each release. Monitor namespace storage. A
 full object stops new writes with `SQLITE_FULL`; this product does not delete
 old events to recover capacity.
 
-[Durable Objects limits]: https://developers.cloudflare.com/durable-objects/platform/limits/
+https://developers.cloudflare.com/durable-objects/platform/limits/
 
 ## Evidence
 

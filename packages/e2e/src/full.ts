@@ -51,6 +51,16 @@ const report: LiveE2eReport = Parsers.LiveE2eReport.parse({
   testedCommit: config.testedCommit,
   actionsRunUrl: config.actionsRunUrl,
   repository: config.githubRepository,
+  dependencyCommits: [
+    "relay:bc7bce049b44f9d5f741d84ef00eeb427e47ce60",
+    "access:20e04f4587d5cbad19b710d9ad226e3583a92b6b",
+    "history:f0cc5ec93f7b61ea9a0f649fde3e212dee553954",
+    "stream:19e653cd3a440d8a817b4038fb284b3ddb07ce9e",
+    "local:e1eb4027f32129c4e874b836370cc79df31e1fa0",
+    "core:5bdaec7455115d1af4ed739b91b8538831e07e7b",
+    "codex-tool:f1526416d4f396fe295bba9df14a20ab391bbbe9",
+    "webapp:582c199c1561bde26a9757b109ea6ad8d9f9a44b",
+  ],
   eventTypes: [
     "issues",
     "issue_comment",
