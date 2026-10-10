@@ -114,6 +114,47 @@ export type WatchResult =
     }>
   | Readonly<{ type: "timeout" }>;
 
+export type LiveE2eConfig = Readonly<{
+  relayUrl: NonEmptyString;
+  alternateRelayUrl: NonEmptyString;
+  githubToken: NonEmptyString;
+  githubRepository: NonEmptyString;
+  githubHookId: NonEmptyString;
+  accessClientId: NonEmptyString;
+  accessClientSecret: NonEmptyString;
+  stateDirectory: NonEmptyString;
+  testedCommit: NonEmptyString;
+  actionsRunUrl: NonEmptyString;
+}>;
+export type LiveE2eReport = Readonly<{
+  testedCommit: NonEmptyString;
+  actionsRunUrl: NonEmptyString;
+  repository: NonEmptyString;
+  eventTypes: ReadonlyArray<EventType>;
+  browserVerified: true;
+  duplicateVerified: true;
+  offlineReplayVerified: true;
+  independentConsumersVerified: true;
+}>;
+export type GitHubE2eRepository = Readonly<{ default_branch: string }>;
+export type GitHubE2eReference = Readonly<{
+  object: Readonly<{ sha: string }>;
+}>;
+export type GitHubE2eIssue = Readonly<{ number: number }>;
+export type GitHubE2ePullRequest = Readonly<{
+  number: number;
+  head: Readonly<{ sha: string }>;
+}>;
+export type GitHubE2eDelivery = Readonly<{
+  id: number;
+  guid: string;
+  event: string;
+  action: string | null;
+  delivered_at: string;
+  redelivery: boolean;
+  status_code: number;
+}>;
+
 export type GitHubActionPayload = Readonly<{ action: string }>;
 export type GitHubRepositoryPayload = Readonly<{
   repository: Readonly<{ full_name: string }>;
@@ -125,6 +166,18 @@ export type GitHubPullRequestPayload = Readonly<{
 }>;
 export type GitHubPullRequestSelection = Readonly<{
   pull_request: Readonly<{ merged: boolean }>;
+}>;
+export type RawEventQuery = Readonly<{
+  after?: string;
+  limit?: string;
+  repository?: string;
+  type?: string;
+}>;
+export type StreamAttachmentData = Readonly<{
+  bytes: number;
+  connectionKey: string;
+  cursor: string;
+  positions: number;
 }>;
 
 import parse from "./generated/parser";
@@ -150,10 +203,19 @@ export const Parsers = parse.buildParsers<{
   WatchResult: WatchResult;
   WatchToolInput: WatchToolInput;
   AcknowledgeToolInput: AcknowledgeToolInput;
+  LiveE2eConfig: LiveE2eConfig;
+  LiveE2eReport: LiveE2eReport;
+  GitHubE2eRepository: GitHubE2eRepository;
+  GitHubE2eReference: GitHubE2eReference;
+  GitHubE2eIssue: GitHubE2eIssue;
+  GitHubE2ePullRequest: GitHubE2ePullRequest;
+  GitHubE2eDelivery: GitHubE2eDelivery;
   GitHubActionPayload: GitHubActionPayload;
   GitHubRepositoryPayload: GitHubRepositoryPayload;
   GitHubPullRequestPayload: GitHubPullRequestPayload;
   GitHubPullRequestSelection: GitHubPullRequestSelection;
+  RawEventQuery: RawEventQuery;
+  StreamAttachmentData: StreamAttachmentData;
 }>({
   stringFormats: {
     nonEmpty: (input: string): boolean => input.length > 0,

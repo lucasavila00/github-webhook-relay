@@ -1,6 +1,7 @@
 import type { Capabilities, Capability } from "@beff/diy/capabilities";
 import {
   Parsers,
+  type StreamAttachmentData,
   type Cursor,
   type EventFilters,
   type StreamMessage,
@@ -8,7 +9,6 @@ import {
 } from "@github-webhook-relay/core";
 
 import { toEvent, type StoredEventRow } from "./history.ts";
-import { GitHubParsers } from "./github.ts";
 import { cursor } from "./ingestion.ts";
 
 const initialCursor = Parsers.Cursor.parse(cursor("0"));
@@ -272,7 +272,7 @@ function parseSubscribe(message: string | ArrayBuffer): Subscribe | undefined {
 }
 
 function parseAttachment(value: unknown): StreamAttachment | undefined {
-  const result = GitHubParsers.StreamAttachmentData.safeParse(value);
+  const result = Parsers.StreamAttachmentData.safeParse(value);
   if (!result.success) return undefined;
   const cursorResult = Parsers.Cursor.safeParse(result.data.cursor);
   return result.data.connectionKey.length > 0 &&

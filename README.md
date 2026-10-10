@@ -1,7 +1,9 @@
 # GitHub webhook relay
 
-The shared event and transport contract is implemented. See the
-[public API reference](docs/public-api.md) for its complete behavior.
+The relay stores selected GitHub events, serves authenticated history and live
+updates, and exposes a local Codex watch tool. See the
+[public API reference](docs/public-api.md) and the
+[production operations guide](docs/operations.md).
 
 ## Purpose
 
@@ -11,16 +13,18 @@ from its last processed position. Reading an event does not delete it.
 
 ## Components
 
-The pnpm workspace contains four packages:
+The pnpm workspace contains the shared core, relay, webapp, local client,
+Codex tool, and real-resource E2E packages:
 
 - A Cloudflare Worker and SQLite-backed Durable Object for webhook ingestion,
   persistent event storage, queries, replay, and live subscriptions.
-- A webapp with a server for sign-in, authorized access, and event browsing.
+- A browser app for authorized event browsing.
 - A local Codex integration that consumes events and connects them to local
   agent work.
-- Documentation for the public contract, setup, and operation.
+- A live harness for GitHub, Cloudflare Access, Chromium, and the MCP tool.
 
-Deployment details remain with the packages that own them.
+The relay Worker owns the only production deployment. It serves the browser
+assets on the same authenticated hostname.
 
 ## Public API
 

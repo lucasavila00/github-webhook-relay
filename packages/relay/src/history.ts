@@ -1,6 +1,7 @@
 import type { Capabilities, Capability } from "@beff/diy/capabilities";
 import {
   Parsers,
+  type RawEventQuery,
   normalizeEventQuery,
   type Cursor,
   type Event,
@@ -10,7 +11,6 @@ import {
   type EventType,
 } from "@github-webhook-relay/core";
 
-import { GitHubParsers, type RawEventQuery } from "./github.ts";
 import { cursor, eventId } from "./ingestion.ts";
 
 type HistoryQuery = Readonly<{
@@ -56,7 +56,7 @@ const internalError = (): Response =>
 
 export function parseEventHistoryQuery(url: URL): QueryResult {
   const value = rawEventQuery(url.searchParams);
-  const rawResult = GitHubParsers.RawEventQuery.safeParse(value);
+  const rawResult = Parsers.RawEventQuery.safeParse(value);
   if (!rawResult.success) return { kind: "invalid_request" };
 
   const raw = rawResult.data;

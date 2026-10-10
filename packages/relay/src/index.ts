@@ -1,4 +1,5 @@
 import { Capabilities } from "@beff/diy/capabilities";
+import type { StoredDelivery } from "@github-webhook-relay/core";
 import { DurableObject } from "cloudflare:workers";
 import {
   serveBrowserAsset,
@@ -25,7 +26,6 @@ import {
   type EventStore,
   type EventStoreCapability,
   type EventPublisherCapability,
-  type StoredDelivery,
 } from "./ingestion.ts";
 import {
   closePendingSubscription,

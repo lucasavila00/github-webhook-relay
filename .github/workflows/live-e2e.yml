@@ -1,0 +1,52 @@
+name: Live E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run the full proof or verify an old revoked token.
+        required: true
+        type: choice
+        options:
+          - full
+          - revocation
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      RELAY_URL: ${{ vars.RELAY_URL }}
+      ALTERNATE_RELAY_URL: ${{ vars.ALTERNATE_RELAY_URL }}
+      GITHUB_E2E_REPOSITORY: ${{ vars.GITHUB_E2E_REPOSITORY }}
+      GITHUB_E2E_HOOK_ID: ${{ vars.GITHUB_E2E_HOOK_ID }}
+      GITHUB_E2E_TOKEN: ${{ secrets.GITHUB_E2E_TOKEN }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      GH_WATCH_STATE_DIRECTORY: ${{ runner.temp }}/gh-watch-live-e2e
+      TESTED_COMMIT: ${{ github.sha }}
+      ACTIONS_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.10.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm generate
+      - run: pnpm check
+      - if: inputs.mode == 'full'
+        run: pnpm --filter @github-webhook-relay/e2e exec playwright install --with-deps chromium
+      - name: Run the real-resource proof
+        run: pnpm --filter @github-webhook-relay/e2e run ${{ inputs.mode }} > live-e2e-report.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: live-e2e-report-${{ github.sha }}-${{ inputs.mode }}
+          path: live-e2e-report.json
+          if-no-files-found: error

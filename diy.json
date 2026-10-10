@@ -5,7 +5,8 @@
     "packages/webapp/src/**/*.ts",
     "packages/webapp/src/**/*.tsx",
     "packages/local/src/**/*.ts",
-    "packages/codex-tool/src/**/*.ts"
+    "packages/codex-tool/src/**/*.ts",
+    "packages/e2e/src/**/*.ts"
   ],
   "ignore": ["**/generated/**"]
 }
