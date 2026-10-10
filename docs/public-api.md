@@ -9,7 +9,7 @@ An event has this JSON shape:
 
 ```json
 {
-  "id": "42",
+  "id": "event_42",
   "deliveryId": "github-delivery-id",
   "type": "issues",
   "repository": "owner/repository",
@@ -31,6 +31,12 @@ The `type` value is one of:
 
 ## Event history
 
+For example, this request gets at most 100 matching events after `cursor_41`:
+
+```http
+GET /api/events?after=cursor_41&repository=owner/repository&type=issues&limit=100
+```
+
 `GET /api/events` accepts these optional query parameters:
 
 | Parameter | Value |
@@ -48,8 +54,15 @@ The response has this shape:
 
 ```json
 {
-  "events": [],
-  "cursor": "42",
+  "events": [{
+    "id": "event_42",
+    "deliveryId": "github-delivery-id",
+    "type": "issues",
+    "repository": "owner/repository",
+    "receivedAt": "2026-10-10T13:00:00Z",
+    "payload": {"action":"opened"}
+  }],
+  "cursor": "cursor_42",
   "hasMore": false
 }
 ```
@@ -64,9 +77,10 @@ can include excluded events from this look-ahead. It does not include a
 matching event that the response does not return.
 
 A cursor is a durable scan position in the log. An omitted cursor starts
-before the first event. A valid cursor refers to the initial position or to a
-retained log position. The server returns the initial-position cursor when it
-scans no events. Clients do not create cursor values.
+before the first event. The initial cursor is `cursor_0`. Other valid cursors
+have the canonical `cursor_<position>` form and refer to a retained log
+position. The server returns the input cursor when it scans no events. Clients
+do not create cursor values.
 
 ## Event stream
 
@@ -76,7 +90,7 @@ one subscription message:
 ```json
 {
   "type": "subscribe",
-  "after": "42",
+  "after": "cursor_42",
   "filters": {
     "repository": "owner/repository",
     "type": "issues"
@@ -92,7 +106,7 @@ stored order. Event messages have this shape:
 {
   "type": "event",
   "event": {
-    "id": "43",
+    "id": "event_43",
     "deliveryId": "delivery-id",
     "type": "issues",
     "repository": "owner/repository",
@@ -105,7 +119,7 @@ stored order. Event messages have this shape:
 The server sends a checkpoint after all event messages that it covers:
 
 ```json
-{"type":"checkpoint","cursor":"43"}
+{"type":"checkpoint","cursor":"cursor_43"}
 ```
 
 It also sends a checkpoint when only excluded events move the scan position.
@@ -128,6 +142,18 @@ input uses status 400. When a request reaches the application, missing or
 rejected credentials use status 401 or 403. Cloudflare Access can reject a
 request before it reaches the application. Unexpected failures use status
 500.
+
+An invalid query uses this response:
+
+```json
+{"error":{"code":"invalid_request","message":"Invalid event query."}}
+```
+
+An unknown or noncanonical cursor uses this response:
+
+```json
+{"error":{"code":"invalid_cursor","message":"Unknown cursor."}}
+```
 
 An invalid stream message or cursor produces an error message before the
 server closes the connection:

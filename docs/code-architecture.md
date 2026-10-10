@@ -25,6 +25,18 @@ local process code. Relay code must not depend on the webapp or Codex client.
 Share types and behavior that multiple components use; keep component details
 with their owner. Package paths, UI framework, and auth provider remain open.
 
+## Event history storage
+
+The Durable Object reads history in one synchronous SQLite transaction. It
+selects matching rows in ascending position order with `limit + 1`. The extra
+matching row sets `hasMore` and is not returned. The response cursor is the
+greatest stored position before that row. Without an extra matching row, it is
+the greatest stored position in the log. Thus, filtered reads advance across
+excluded rows without skipping an unreturned matching event.
+
+History reads do not insert, update, or delete data. The server does not store
+consumer progress. Each consumer supplies its own cursor.
+
 ## Free functions and immutable data
 
 Write application behavior as free functions. Use plain records, arrays, and

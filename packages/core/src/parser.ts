@@ -1,5 +1,30 @@
 import type { NumberFormat, StringFormat } from "@beff/client";
 
+export type AccessJwtHeader = Readonly<{
+  alg: "RS256";
+  kid: string;
+}>;
+export type AccessJwtPayload = Readonly<{
+  aud: string | ReadonlyArray<string>;
+  common_name?: string;
+  email?: string;
+  exp: number;
+  iss: string;
+  sub: string;
+}>;
+export type AccessKeySet = Readonly<{
+  keys: ReadonlyArray<
+    Readonly<{
+      alg: "RS256";
+      e: string;
+      kid: string;
+      kty: "RSA";
+      n: string;
+      use: "sig";
+    }>
+  >;
+}>;
+
 export type NonEmptyString = StringFormat<"nonEmpty">;
 export type Cursor = NonEmptyString;
 export type EventType =
@@ -77,10 +102,19 @@ export type GitHubPullRequestSelection = Readonly<{
     merged: boolean;
   }>;
 }>;
+export type RawEventQuery = Readonly<{
+  after?: string;
+  repository?: string;
+  type?: string;
+  limit?: string;
+}>;
 
 import parse from "./generated/parser";
 
 export const Parsers = parse.buildParsers<{
+  AccessJwtHeader: AccessJwtHeader;
+  AccessJwtPayload: AccessJwtPayload;
+  AccessKeySet: AccessKeySet;
   Cursor: Cursor;
   Event: Event;
   EventFilters: EventFilters;
@@ -95,6 +129,7 @@ export const Parsers = parse.buildParsers<{
   GitHubRepositoryPayload: GitHubRepositoryPayload;
   GitHubPullRequestPayload: GitHubPullRequestPayload;
   GitHubPullRequestSelection: GitHubPullRequestSelection;
+  RawEventQuery: RawEventQuery;
 }>({
   stringFormats: {
     nonEmpty: (input: string): boolean => input.length > 0,

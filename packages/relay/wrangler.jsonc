@@ -3,6 +3,17 @@
   "name": "github-webhook-relay",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-06",
+  "routes": [
+    {
+      "pattern": "relay.example.com",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "ACCESS_AUD": "set-the-access-application-audience",
+    "ACCESS_TEAM_DOMAIN": "https://set-your-team.cloudflareaccess.com",
+    "RELAY_HOSTNAME": "relay.example.com"
+  },
   "durable_objects": {
     "bindings": [
       {
