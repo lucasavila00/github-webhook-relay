@@ -61,6 +61,28 @@ describe.sequential("local client with the relay Worker", () => {
     })).resolves.toEqual({ type: "timeout" });
   }, 30_000);
 
+  it("publishes a live ingress event to a waiting relay client", async () => {
+    const fixture = await workerFixture();
+    let markSubscribed: (() => void) | null | undefined;
+    const subscribed = new Promise<void>((resolve) => {
+      markSubscribed = resolve;
+    });
+    const batch = nextMatchingBatch(fixture.restartClient(() => {
+      markSubscribed?.();
+    }), {
+      consumer: "live-ingress",
+      filters: { repository: "owner/live", type: "issues" },
+      waitMilliseconds: 5_000,
+      signal: undefined,
+    });
+    await subscribed;
+    await fixture.send("live-ingress", "owner/live");
+
+    expect((await batch).events).toMatchObject([
+      { deliveryId: "live-ingress", repository: "owner/live" },
+    ]);
+  }, 30_000);
+
   it("repeats a real unacknowledged batch and rejects stale tokens", async () => {
     const fixture = await workerFixture();
     await fixture.send("repeat", "owner/repeat");
@@ -184,12 +206,12 @@ describe.sequential("local client with the relay Worker", () => {
     });
     await connected;
     await stopChild(fixture.worker.child);
-    const worker = await startWorker(fixture.teamDomain, {
+    await startOwnerWorker(fixture.teamDomain, {
       port: fixture.worker.port,
       persist: fixture.worker.persist,
     });
     expect(await sendWebhook(
-      worker.port,
+      fixture.worker.ingressPort,
       fixture.token,
       "after-restart",
       "owner/reconnect",
@@ -227,6 +249,7 @@ describe.sequential("local client with the relay Worker", () => {
 
 type WorkerRuntime = Readonly<{
   child: ChildProcess;
+  ingressPort: number;
   port: number;
   persist: string;
 }>;
@@ -255,7 +278,7 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
   const worker = await startWorker(keyServer.url, undefined);
   const stateDirectory = await temporaryDirectory("gh-watch-worker-state-");
   const config = {
-    relayUrl: `http://127.0.0.1:${worker.port}`,
+    relayUrl: `http://localhost:${worker.port}`,
     stateDirectory,
     accessClientId: "service-id",
     accessClientSecret: "service-secret",
@@ -280,7 +303,7 @@ async function workerFixture(withIdentity = true): Promise<WorkerFixture> {
     restartClient: createClient,
     send: async (delivery, repository) => {
       expect(await sendWebhook(
-        worker.port,
+        worker.ingressPort,
         token,
         delivery,
         repository,
@@ -302,8 +325,14 @@ function observedSocketService(
   return {
     connect: async (url, credentials, signal) => {
       const socket = await service.connect(url, credentials, signal);
-      onConnected();
-      return socket;
+      return {
+        close: socket.close,
+        receive: socket.receive,
+        send: (message) => {
+          socket.send(message);
+          onConnected();
+        },
+      };
     },
   };
 }
@@ -312,17 +341,41 @@ async function startWorker(
   teamDomain: string,
   existing: Readonly<{ port: number; persist: string }> | null | undefined,
 ): Promise<WorkerRuntime> {
+  const owner = await startOwnerWorker(teamDomain, existing);
+  const ingressPort = await unusedPort();
+  const directory = join(process.cwd(), "../relay");
+  const ingressChild = spawn(
+    join(directory, "node_modules/.bin/wrangler"),
+    [
+      "dev", "--config", "wrangler.ingress.jsonc",
+      "--ip", "127.0.0.1", "--port", String(ingressPort),
+    ],
+    {
+      cwd: directory,
+      env: { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false" },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  await waitForWorker(ingressChild);
+  cleanups.push(async () => stopChild(ingressChild));
+  return { ...owner, ingressPort };
+}
+
+async function startOwnerWorker(
+  teamDomain: string,
+  existing: Readonly<{ port: number; persist: string }> | null | undefined,
+): Promise<Readonly<{ child: ChildProcess; port: number; persist: string }>> {
   const port = existing?.port ?? await unusedPort();
   const persist = existing?.persist ?? await temporaryDirectory("gh-watch-worker-");
   const directory = join(process.cwd(), "../relay");
   const child = spawn(
     join(directory, "node_modules/.bin/wrangler"),
     [
-      "dev", "--ip", "127.0.0.1", "--port", String(port),
+      "dev", "--config", "wrangler.jsonc",
+      "--ip", "127.0.0.1", "--port", String(port),
       "--persist-to", persist,
       "--var", "ACCESS_AUD:test-audience",
       "--var", `ACCESS_TEAM_DOMAIN:${teamDomain}`,
-      "--var", "RELAY_HOSTNAME:relay.example.com",
       "--var", "WEBHOOK_SECRET:test-secret",
     ],
     {
