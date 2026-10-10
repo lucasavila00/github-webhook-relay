@@ -126,6 +126,18 @@ export type GitHubPullRequestPayload = Readonly<{
 export type GitHubPullRequestSelection = Readonly<{
   pull_request: Readonly<{ merged: boolean }>;
 }>;
+export type RawEventQuery = Readonly<{
+  after?: string;
+  repository?: string;
+  type?: string;
+  limit?: string;
+}>;
+export type StreamAttachmentData = Readonly<{
+  bytes: number;
+  connectionKey: string;
+  cursor: string;
+  positions: number;
+}>;
 
 import parse from "./generated/parser";
 
@@ -154,6 +166,8 @@ export const Parsers = parse.buildParsers<{
   GitHubRepositoryPayload: GitHubRepositoryPayload;
   GitHubPullRequestPayload: GitHubPullRequestPayload;
   GitHubPullRequestSelection: GitHubPullRequestSelection;
+  RawEventQuery: RawEventQuery;
+  StreamAttachmentData: StreamAttachmentData;
 }>({
   stringFormats: {
     nonEmpty: (input: string): boolean => input.length > 0,

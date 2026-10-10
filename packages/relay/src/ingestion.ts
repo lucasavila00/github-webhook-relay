@@ -3,17 +3,11 @@ import type {
   ErrorCode,
   EventType,
   HttpError,
+  StoredDelivery,
 } from "@github-webhook-relay/core";
+import { Parsers } from "@github-webhook-relay/core";
 
-import { GitHubParsers } from "./github.ts";
-
-export type StoredDelivery = Readonly<{
-  deliveryId: string;
-  eventType: EventType;
-  repository: string;
-  receivedAt: string;
-  payload: ArrayBuffer;
-}>;
+export type { StoredDelivery } from "@github-webhook-relay/core";
 
 type Cryptography = Readonly<{
   verify: (body: ArrayBuffer, signature: Uint8Array<ArrayBuffer>) => Promise<boolean>;
@@ -121,7 +115,7 @@ export function selectGitHubEvent(
   githubEvent: string,
   payload: Readonly<Record<string, unknown>>,
 ): Selection {
-  const actionResult = GitHubParsers.GitHubActionPayload.safeParse(payload);
+  const actionResult = Parsers.GitHubActionPayload.safeParse(payload);
   if (!actionResult.success) {
     return { kind: "ignored" };
   }
@@ -132,17 +126,17 @@ export function selectGitHubEvent(
   }
 
   if (type === "pull_request") {
-    const selectionResult = GitHubParsers.GitHubPullRequestSelection.safeParse(payload);
+    const selectionResult = Parsers.GitHubPullRequestSelection.safeParse(payload);
     if (!selectionResult.success || !selectionResult.data.pull_request.merged) {
       return { kind: "ignored" };
     }
-    const result = GitHubParsers.GitHubPullRequestPayload.safeParse(payload);
+    const result = Parsers.GitHubPullRequestPayload.safeParse(payload);
     return result.success
       ? selected(type, result.data.repository.full_name)
       : { kind: "invalid" };
   }
 
-  const result = GitHubParsers.GitHubRepositoryPayload.safeParse(payload);
+  const result = Parsers.GitHubRepositoryPayload.safeParse(payload);
   return result.success
     ? selected(type, result.data.repository.full_name)
     : { kind: "invalid" };
