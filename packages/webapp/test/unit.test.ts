@@ -25,7 +25,7 @@ describe("event inspector state", () => {
       type: "load",
       load: { filters: {}, after: "cursor_1", kind: "later" },
     });
-    if (later === undefined) return;
+    if (later == null) return;
     const loading = reduceView(loaded, later);
     const atSecond = reduceView(loading, { type: "loaded", page: secondPage });
     expect(atSecond.state).toBe("ready");
@@ -44,7 +44,12 @@ describe("event inspector state", () => {
     const ready = reduceView(initialView(), { type: "loaded", page: secondPage });
     const loading = reduceView(ready, {
       type: "load",
-      load: { filters: { type: "issues" }, kind: "reset" },
+      load: {
+        after: undefined,
+        filters: { repository: undefined, type: "issues" },
+        kind: "reset",
+        pageIndex: undefined,
+      },
     });
     expect(loading).toMatchObject({ state: "loading", previous: { pages: [secondPage] } });
     const failed = reduceView(loading, { type: "failed", message: "Unavailable." });

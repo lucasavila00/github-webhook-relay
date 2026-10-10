@@ -84,10 +84,13 @@ export function App(
   const submit = (event: SubmitEvent): void => {
     event.preventDefault();
     const filters: EventFilters = {
-      ...(repository === "" ? {} : { repository }),
-      ...(type === "" ? {} : { type }),
+      repository: repository === "" ? undefined : repository,
+      type: type === "" ? undefined : type,
     };
-    dispatch({ type: "load", load: { filters, kind: "reset" } });
+    dispatch({
+      type: "load",
+      load: { after: undefined, filters, kind: "reset", pageIndex: undefined },
+    });
   };
 
   return (
@@ -117,7 +120,7 @@ export function App(
       </form>
       {view.state === "loading" && <p role="status">Loading events…</p>}
       {view.state === "error" && <p role="alert">{view.message}</p>}
-      {ready !== undefined && <EventView ready={ready} dispatch={dispatch} />}
+      {ready != null && <EventView ready={ready} dispatch={dispatch} />}
     </main>
   );
 }
@@ -157,11 +160,11 @@ function EventView(
         >Older</button>
         <button
           type="button"
-          disabled={later === undefined}
-          onClick={() => later !== undefined && dispatch(later)}
+          disabled={later == null}
+          onClick={() => later != null && dispatch(later)}
         >Later</button>
       </nav>
-      {selected !== undefined && <aside aria-label="Event payload">
+      {selected != null && <aside aria-label="Event payload">
         <h2>Original payload</h2>
         <pre>{JSON.stringify(selected.payload, null, 2)}</pre>
       </aside>}

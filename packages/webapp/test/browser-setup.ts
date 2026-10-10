@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const relayUrl = "http://localhost:18791";
+const webhookUrl = "http://127.0.0.1:18791";
 const accessUrl = "http://127.0.0.1:18792";
 
 export default async function setup(): Promise<() => Promise<void>> {
@@ -37,7 +38,7 @@ export default async function setup(): Promise<() => Promise<void>> {
 
   const token = await accessToken(keys.privateKey);
   process.env.RELAY_BROWSER_URL = relayUrl;
-  process.env.RELAY_DIRECT_URL = relayUrl;
+  process.env.RELAY_DIRECT_URL = webhookUrl;
   process.env.RELAY_BROWSER_TOKEN = token;
   const persistence = await mkdtemp(join(tmpdir(), "relay-browser-"));
   const relay = startRelay(persistence);
@@ -71,7 +72,7 @@ function startRelay(persistence: string): ChildProcess {
 
 async function waitForRelay(relay: ChildProcess): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (relay.exitCode !== null) throw new Error("The test relay stopped.");
+    if (relay.exitCode != null) throw new Error("The test relay stopped.");
     try {
       const response = await fetch(relayUrl);
       if (response.status === 401) return;
@@ -117,7 +118,7 @@ function listen(server: Server, port: number): Promise<void> {
   return new Promise((resolve) => server.listen(port, "127.0.0.1", resolve));
 }
 
-function required(value: string | undefined): string {
-  if (value === undefined) throw new Error("The RSA key is incomplete.");
+function required(value: string | null | undefined): string {
+  if (value == null) throw new Error("The RSA key is incomplete.");
   return value;
 }

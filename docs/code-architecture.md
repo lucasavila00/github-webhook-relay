@@ -11,6 +11,9 @@ API is described in the [README](../README.md).
   delivery. Its Durable Object uses SQLite storage for the event log.
   [GitHub webhook ingestion](webhook-ingestion.md) defines the accepted events,
   storage schema, and response behavior.
+- The ingress Worker accepts only GitHub webhook posts. It uses an external
+  binding to call the `EventRelay` Durable Object in the relay Worker. The
+  relay Worker owns storage and serves only the protected read surface.
 - The webapp server owns sign-in and authorization for webapp access. The
   browser renders event data and uses the public contract.
 - The local integration owns its consumer cursor and the connection to local

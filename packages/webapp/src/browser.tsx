@@ -22,5 +22,5 @@ const capabilities = Capabilities.create<
 });
 
 const root = document.getElementById("app");
-if (root === null) throw new Error("The app root is missing.");
+if (root == null) throw new Error("The app root is missing.");
 render(<App capabilities={capabilities} />, root);

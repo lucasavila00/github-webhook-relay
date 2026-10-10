@@ -25,6 +25,7 @@ import {
   handleRelayRequest as handleRelayRuntimeRequest,
   type EventRelay,
 } from "../src/index.ts";
+import { handleIngressRequest } from "../src/ingress.ts";
 import {
   cursor,
   eventId,
@@ -57,7 +58,6 @@ const keyUrl = `${env.ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`;
 const configuration = {
   accessAudience: env.ACCESS_AUD,
   accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-  relayHostname: "relay.example.com",
 } as const;
 
 const capabilities = Capabilities.create<
@@ -342,8 +342,8 @@ const accessCapabilities = Capabilities.create<
     verify: crypto.subtle.verify.bind(crypto.subtle),
   },
   accessKeyStore: {
-    read: (url: string): Promise<unknown | undefined> =>
-      runInDurableObject<EventRelay, unknown | undefined>(
+    read: (url: string): Promise<unknown | null | undefined> =>
+      runInDurableObject<EventRelay, unknown | null | undefined>(
         accessKeyStoreStub(),
         (_instance, state) => state.storage.get(url),
       ),
@@ -421,14 +421,14 @@ describe.sequential("GitHub webhook ingestion", () => {
     const body = payload({ action: "opened" });
     const signature = await sign(`${body} `);
 
-    const rejected = await SELF.fetch("https://relay.test/webhooks/github", {
+    const rejected = await ingressFetch("https://hooks.test/webhooks/github", {
       method: "POST",
       headers: headers("issues", "signature-1", signature),
       body,
     });
     await expectError(rejected, 401, "unauthorized");
 
-    const invalidJson = await SELF.fetch("https://relay.test/webhooks/github", {
+    const invalidJson = await ingressFetch("https://hooks.test/webhooks/github", {
       method: "POST",
       headers: headers("issues", "signature-2", await sign("not-json")),
       body: "not-json",
@@ -445,9 +445,9 @@ describe.sequential("GitHub webhook ingestion", () => {
         "x-github-delivery": "unauthorized-1",
         "x-github-event": "issues",
       });
-      if (signature !== undefined) requestHeaders.set("x-hub-signature-256", signature);
+      if (signature != null) requestHeaders.set("x-hub-signature-256", signature);
 
-      const response = await SELF.fetch("https://relay.test/webhooks/github", {
+      const response = await ingressFetch("https://hooks.test/webhooks/github", {
         method: "POST",
         headers: requestHeaders,
         body,
@@ -458,30 +458,24 @@ describe.sequential("GitHub webhook ingestion", () => {
 
   it("returns 400 for missing headers or invalid selected fields", async () => {
     const body = payload({ action: "opened" });
-    const missingDelivery = await SELF.fetch(
-      "https://relay.test/webhooks/github",
-      {
-        method: "POST",
-        headers: {
-          "x-github-event": "issues",
-          "x-hub-signature-256": await sign(body),
-        },
-        body,
+    const missingDelivery = await ingressFetch("https://hooks.test/webhooks/github", {
+      method: "POST",
+      headers: {
+        "x-github-event": "issues",
+        "x-hub-signature-256": await sign(body),
       },
-    );
+      body,
+    });
     await expectError(missingDelivery, 400, "invalid_request");
 
-    const missingEvent = await SELF.fetch(
-      "https://relay.test/webhooks/github",
-      {
-        method: "POST",
-        headers: {
-          "x-github-delivery": "missing-event-1",
-          "x-hub-signature-256": await sign(body),
-        },
-        body,
+    const missingEvent = await ingressFetch("https://hooks.test/webhooks/github", {
+      method: "POST",
+      headers: {
+        "x-github-delivery": "missing-event-1",
+        "x-hub-signature-256": await sign(body),
       },
-    );
+      body,
+    });
     await expectError(missingEvent, 400, "invalid_request");
 
     const invalidFields = await send(
@@ -552,6 +546,50 @@ describe.sequential("GitHub webhook ingestion", () => {
 
     const response = await send("issues", "storage-failure", payload({ action: "opened" }));
     await expectError(response, 500, "internal_error");
+  });
+});
+
+describe.sequential("Worker surface boundaries", () => {
+  afterEach(async () => {
+    await reset();
+  });
+
+  it("rejects protected routes in the ingress Worker", async () => {
+    const access = await createAccessSession();
+    const headers = { "Cf-Access-Jwt-Assertion": access.token };
+    const responses = await Promise.all([
+      ingressFetch("https://hooks.test/", { headers }),
+      ingressFetch("https://hooks.test/api/events", { headers }),
+      ingressFetch("https://hooks.test/api/events/stream", {
+        headers: { ...headers, Upgrade: "websocket" },
+      }),
+      ingressFetch("https://hooks.test/webhooks/github", { headers }),
+    ]);
+    expect(responses.map(({ status }) => status)).toEqual([404, 404, 404, 404]);
+  });
+
+  it("rejects webhook and unknown routes in the relay Worker", async () => {
+    const access = await createAccessSession();
+    const headers = { "Cf-Access-Jwt-Assertion": access.token };
+    const responses = await Promise.all([
+      SELF.fetch("https://relay.test/webhooks/github", {
+        method: "POST",
+        headers,
+      }),
+      SELF.fetch("https://relay.test/api/unknown", { headers }),
+      SELF.fetch("https://relay.test/unknown", { headers }),
+      SELF.fetch("https://relay.test/", { method: "POST", headers }),
+    ]);
+    expect(responses.map(({ status }) => status)).toEqual([404, 404, 404, 404]);
+  });
+
+  it("rejects unknown relay routes before authentication", async () => {
+    const responses = await Promise.all([
+      SELF.fetch("https://relay.test/webhooks/github"),
+      SELF.fetch("https://relay.test/api/unknown"),
+      SELF.fetch("https://relay.test/unknown"),
+    ]);
+    expect(responses.map(({ status }) => status)).toEqual([404, 404, 404]);
   });
 });
 
@@ -1158,7 +1196,6 @@ describe.sequential("authenticated browser assets", () => {
       {
         accessAudience: env.ACCESS_AUD,
         accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-        relayHostname: env.RELAY_HOSTNAME,
       },
       env.EVENT_RELAY,
       new Request("https://relay.test/", {
@@ -1177,7 +1214,6 @@ describe.sequential("authenticated browser assets", () => {
       {
         accessAudience: env.ACCESS_AUD,
         accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-        relayHostname: env.RELAY_HOSTNAME,
       },
       env.EVENT_RELAY,
       new Request("https://relay.test/", { headers }),
@@ -1242,11 +1278,15 @@ function payload(
 }
 
 async function send(event: string, delivery: string, body: string): Promise<Response> {
-  return SELF.fetch("https://relay.test/webhooks/github", {
+  return ingressFetch("https://hooks.test/webhooks/github", {
     method: "POST",
     headers: headers(event, delivery, await sign(body)),
     body,
   });
+}
+
+function ingressFetch(input: string, init: RequestInit): Promise<Response> {
+  return handleIngressRequest(env.EVENT_RELAY, new Request(input, init));
 }
 
 function headers(event: string, delivery: string, signature: string): Headers {
@@ -1318,7 +1358,7 @@ async function createHistorySigningKeys(): Promise<HistorySigningKeys> {
     ["sign", "verify"],
   );
   const exported = await crypto.subtle.exportKey("jwk", pair.publicKey);
-  if (exported.e === undefined || exported.n === undefined) {
+  if (exported.e == null || exported.n == null) {
     throw new Error("The generated test key is not an RSA key.");
   }
   return {
@@ -1375,7 +1415,6 @@ function readHistory(access: AccessSession, query: string): Promise<Response> {
     {
       accessAudience: env.ACCESS_AUD,
       accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-      relayHostname: env.RELAY_HOSTNAME,
     },
     env.EVENT_RELAY,
     new Request(`https://relay.test/api/events${query}`, {
@@ -1390,7 +1429,6 @@ async function openStream(access: AccessSession): Promise<WebSocket> {
     {
       accessAudience: env.ACCESS_AUD,
       accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-      relayHostname: env.RELAY_HOSTNAME,
     },
     env.EVENT_RELAY,
     new Request("https://relay.test/api/events/stream", {
@@ -1400,7 +1438,7 @@ async function openStream(access: AccessSession): Promise<WebSocket> {
       },
     }),
   );
-  if (response.status !== 101 || response.webSocket === null) {
+  if (response.status !== 101 || response.webSocket == null) {
     throw new Error(`WebSocket upgrade failed with status ${response.status}.`);
   }
   response.webSocket.accept();

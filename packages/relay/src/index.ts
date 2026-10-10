@@ -53,7 +53,6 @@ type EntryCapability = AccessCapability | AssetCapability;
 type RelayConfiguration = Readonly<{
   accessAudience: string;
   accessTeamDomain: string;
-  relayHostname: string;
 }>;
 
 const objectName = "github-webhook-relay";
@@ -117,7 +116,7 @@ export class EventRelay extends DurableObject<RelayEnv> {
 
   override webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
     const timer = this.#subscriptionTimers.get(socket);
-    if (timer !== undefined) {
+    if (timer != null) {
       clearTimeout(timer);
       this.#subscriptionTimers.delete(socket);
     }
@@ -166,7 +165,7 @@ export class EventRelay extends DurableObject<RelayEnv> {
 
   #clearTimer(socket: WebSocket): void {
     const timer = this.#subscriptionTimers.get(socket);
-    if (timer !== undefined) clearTimeout(timer);
+    if (timer != null) clearTimeout(timer);
     this.#subscriptionTimers.delete(socket);
   }
 }
@@ -227,7 +226,6 @@ export default {
       {
         accessAudience: env.ACCESS_AUD,
         accessTeamDomain: env.ACCESS_TEAM_DOMAIN,
-        relayHostname: env.RELAY_HOSTNAME,
       },
       env.EVENT_RELAY,
       request,
@@ -242,45 +240,33 @@ export async function handleRelayRequest(
   request: Request,
 ): Promise<Response> {
   const url = new URL(request.url);
-  const webhook = request.method === "POST" &&
-    url.hostname === configuration.relayHostname &&
-    url.pathname === "/webhooks/github";
-  if (!webhook) {
-    const principal = await authenticateAccessRequest(
-      capabilities,
-      {
-        audience: configuration.accessAudience,
-        teamDomain: configuration.accessTeamDomain,
-      },
-      request,
-    );
-    if (principal === undefined) {
-      return Response.json(
-        {
-          error: {
-            code: "unauthorized",
-            message: "Authentication is required.",
-          },
-        },
-        { status: 401 },
-      );
-    }
-    if (
-      request.headers.get("Upgrade")?.toLowerCase() === "websocket" &&
-      url.hostname !== configuration.relayHostname
-    ) {
-      return Response.json(
-        {
-          error: {
-            code: "forbidden",
-            message: "This endpoint is not available.",
-          },
-        },
-        { status: 403 },
-      );
-    }
+  const api = request.method === "GET" &&
+    (url.pathname === "/api/events" || url.pathname === "/api/events/stream");
+  const asset = (request.method === "GET" || request.method === "HEAD") &&
+    (url.pathname === "/" || url.pathname.startsWith("/assets/"));
+  if (!api && !asset) {
+    return new Response(null, { status: 404 });
   }
-  if (url.pathname.startsWith("/api/") || url.pathname === "/webhooks/github") {
+  const principal = await authenticateAccessRequest(
+    capabilities,
+    {
+      audience: configuration.accessAudience,
+      teamDomain: configuration.accessTeamDomain,
+    },
+    request,
+  );
+  if (principal == null) {
+    return Response.json(
+      {
+        error: {
+          code: "unauthorized",
+          message: "Authentication is required.",
+        },
+      },
+      { status: 401 },
+    );
+  }
+  if (api) {
     return eventRelay.get(eventRelay.idFromName(objectName)).fetch(request);
   }
   return serveBrowserAsset(capabilities, request);
@@ -294,10 +280,10 @@ function createEntryCapabilities(assets: Fetcher): Capabilities<EntryCapability>
       verify: crypto.subtle.verify.bind(crypto.subtle),
     },
     accessKeyStore: {
-      read: async (url: string): Promise<unknown | undefined> => {
+      read: async (url: string): Promise<unknown | null | undefined> => {
         const cache = await caches.open("access-signing-keys");
         const response = await cache.match(new Request(url));
-        return response === undefined ? undefined : response.json();
+        return response == null ? undefined : response.json();
       },
       write: async (url: string, value: unknown): Promise<void> => {
         const cache = await caches.open("access-signing-keys");

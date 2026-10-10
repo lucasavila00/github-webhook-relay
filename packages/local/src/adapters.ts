@@ -137,7 +137,7 @@ async function waitForOpen(socket: WebSocket, signal: AbortSignal): Promise<void
       socket.terminate();
       reject(localError("cancelled", "Watch was cancelled."));
     };
-    const onResponse = (_request: unknown, response: { statusCode?: number; resume: () => void }): void => {
+    const onResponse = (_request: unknown, response: { statusCode: number | null | undefined; resume: () => void }): void => {
       const code = response.statusCode;
       response.resume();
       cleanup();
@@ -160,9 +160,9 @@ async function waitForOpen(socket: WebSocket, signal: AbortSignal): Promise<void
 
 function socketAdapter(socket: WebSocket): RelaySocket {
   let queued: ReadonlyArray<SocketInput> = [];
-  let receiver: ((input: SocketInput) => void) | undefined;
+  let receiver: ((input: SocketInput) => void) | null | undefined;
   const deliver = (input: SocketInput): void => {
-    if (receiver === undefined) {
+    if (receiver == null) {
       queued = [...queued, input];
       return;
     }
@@ -188,7 +188,7 @@ function socketAdapter(socket: WebSocket): RelaySocket {
     close: () => socket.close(),
     receive: async (signal) => {
       const first = queued[0];
-      if (first !== undefined) {
+      if (first != null) {
         queued = queued.slice(1);
         return first;
       }

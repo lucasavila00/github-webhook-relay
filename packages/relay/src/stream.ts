@@ -34,8 +34,8 @@ export type StreamStore = Readonly<{
     subscribe: Subscribe,
     visit: (row: StoredEventRow) => boolean,
   ) => OpenResult;
-  readEvent: (position: string) => StoredEventRow | undefined;
-  readFilters: (connectionKey: string) => EventFilters | undefined;
+  readEvent: (position: string) => StoredEventRow | null | undefined;
+  readFilters: (connectionKey: string) => EventFilters | null | undefined;
 }>;
 
 type StreamSockets = Readonly<{
@@ -77,10 +77,10 @@ export function createStreamStore(
     }),
     open: (connectionKey, subscribe, visit) => storage.transactionSync(() => {
       const after = parseCursorPosition(subscribe.after ?? initialCursor);
-      if (after === undefined || !hasPosition(storage, after)) {
+      if (after == null || !hasPosition(storage, after)) {
         return { kind: "invalid_cursor" };
       }
-      const filters = subscribe.filters ?? {};
+      const filters = subscribe.filters ?? { repository: undefined, type: undefined };
       writeSubscription(storage, connectionKey, filters);
       for (const row of scanRows(storage, after)) {
         if (!visit(row)) return { kind: "budget" };
@@ -128,29 +128,31 @@ export function subscribeToEvents(
   connectionKey: string,
   message: string | ArrayBuffer,
 ): void {
-  if (parseAttachment(capabilities.streamSockets.load(socket)) !== undefined) {
+  if (parseAttachment(capabilities.streamSockets.load(socket)) != null) {
     closeWithError(
       capabilities,
       socket,
       "invalid_request",
       "Only one subscription is allowed.",
       1008,
+      undefined,
     );
     return;
   }
   const subscribe = parseSubscribe(message);
-  if (subscribe === undefined) {
+  if (subscribe == null) {
     closeWithError(
       capabilities,
       socket,
       "invalid_request",
       "Invalid subscription.",
       1008,
+      undefined,
     );
     return;
   }
 
-  const filters = subscribe.filters ?? {};
+  const filters = subscribe.filters ?? { repository: undefined, type: undefined };
   let attachment: StreamAttachment = {
     bytes: 0,
     connectionKey,
@@ -171,6 +173,7 @@ export function subscribeToEvents(
       "invalid_cursor",
       "Unknown cursor.",
       1008,
+      undefined,
     );
     return;
   }
@@ -186,15 +189,15 @@ export function publishStoredEvent(
   position: string,
 ): void {
   const row = capabilities.streamStore.readEvent(position);
-  if (row === undefined) return;
+  if (row == null) return;
   for (const socket of capabilities.streamSockets.list()) {
-    let connectionKey: string | undefined;
+    let connectionKey: string | null | undefined;
     try {
       const attachment = parseAttachment(capabilities.streamSockets.load(socket));
-      if (attachment === undefined) continue;
+      if (attachment == null) continue;
       connectionKey = attachment.connectionKey;
       const filters = capabilities.streamStore.readFilters(attachment.connectionKey);
-      if (filters === undefined) {
+      if (filters == null) {
         closeInternal(capabilities, socket, attachment.connectionKey);
         continue;
       }
@@ -214,13 +217,14 @@ export function closePendingSubscription(
   capabilities: Capabilities<StreamCapabilities>,
   socket: WebSocket,
 ): void {
-  if (parseAttachment(capabilities.streamSockets.load(socket)) !== undefined) return;
+  if (parseAttachment(capabilities.streamSockets.load(socket)) != null) return;
   closeWithError(
     capabilities,
     socket,
     "invalid_request",
     "Subscription required.",
     1008,
+    undefined,
   );
 }
 
@@ -229,7 +233,7 @@ export function closeStream(
   attachment: unknown,
 ): void {
   const parsed = parseAttachment(attachment);
-  if (parsed !== undefined) capabilities.streamStore.close(parsed.connectionKey);
+  if (parsed != null) capabilities.streamStore.close(parsed.connectionKey);
 }
 
 export function failStream(
@@ -257,7 +261,7 @@ export function joinRepositoryFilter(chunks: ReadonlyArray<string>): string {
   }).join("");
 }
 
-function parseSubscribe(message: string | ArrayBuffer): Subscribe | undefined {
+function parseSubscribe(message: string | ArrayBuffer): Subscribe | null | undefined {
   try {
     const text = typeof message === "string"
       ? message
@@ -270,7 +274,7 @@ function parseSubscribe(message: string | ArrayBuffer): Subscribe | undefined {
   }
 }
 
-function parseAttachment(value: unknown): StreamAttachment | undefined {
+function parseAttachment(value: unknown): StreamAttachment | null | undefined {
   const result = Parsers.StreamAttachmentData.safeParse(value);
   if (!result.success) return undefined;
   const cursorResult = Parsers.Cursor.safeParse(result.data.cursor);
@@ -299,8 +303,8 @@ function createDelivery(
   const checkpoint = Parsers.Cursor.parse(cursor(row.position));
   const checkpointMessage = encodeMessage({ type: "checkpoint", cursor: checkpoint });
   const addedBytes = byteLength(checkpointMessage) +
-    (eventMessage === undefined ? 0 : byteLength(eventMessage));
-  const oversizedFirstDelivery = eventMessage !== undefined &&
+    (eventMessage == null ? 0 : byteLength(eventMessage));
+  const oversizedFirstDelivery = eventMessage != null &&
     attachment.bytes === 0 && addedBytes > maxBytes;
   if (attachment.positions >= maxPositions ||
       (attachment.bytes + addedBytes > maxBytes && !oversizedFirstDelivery)) {
@@ -317,7 +321,7 @@ function createDelivery(
     delivery: {
       attachment: next,
       messages: [
-        ...(eventMessage === undefined ? [] : [eventMessage]),
+        ...(eventMessage == null ? [] : [eventMessage]),
         checkpointMessage,
       ],
       shouldClose: next.positions >= maxPositions || next.bytes >= maxBytes ||
@@ -354,20 +358,20 @@ function closeWithError(
   code: "invalid_request" | "invalid_cursor" | "internal_error",
   message: string,
   closeCode: number,
-  connectionKey?: string,
+  connectionKey: string | null | undefined,
 ): void {
   capabilities.streamSockets.send(
     socket,
     encodeMessage({ type: "error", error: { code, message } }),
   );
-  if (connectionKey !== undefined) capabilities.streamStore.close(connectionKey);
+  if (connectionKey != null) capabilities.streamStore.close(connectionKey);
   capabilities.streamSockets.close(socket, closeCode, message);
 }
 
 function closeInternal(
   capabilities: Capabilities<StreamCapabilities>,
   socket: WebSocket,
-  connectionKey?: string,
+  connectionKey: string | null | undefined,
 ): void {
   closeWithError(
     capabilities,
@@ -382,9 +386,9 @@ function closeInternal(
 function isolateFailedSocket(
   capabilities: Capabilities<StreamCapabilities>,
   socket: WebSocket,
-  connectionKey?: string,
+  connectionKey: string | null | undefined,
 ): void {
-  if (connectionKey !== undefined) {
+  if (connectionKey != null) {
     try {
       capabilities.streamStore.close(connectionKey);
     } catch {
@@ -431,8 +435,8 @@ function matchesFilters(
   type: string,
   filters: EventFilters,
 ): boolean {
-  return (filters.repository === undefined || filters.repository === repository) &&
-    (filters.type === undefined || filters.type === type);
+  return (filters.repository == null || filters.repository === repository) &&
+    (filters.type == null || filters.type === type);
 }
 
 function writeSubscription(
@@ -440,15 +444,16 @@ function writeSubscription(
   connectionKey: string,
   filters: EventFilters,
 ): void {
-  const hasRepository = filters.repository === undefined ? 0 : 1;
+  const hasRepository = filters.repository == null ? 0 : 1;
   storage.sql.exec(
     `INSERT INTO subscriptions (connection_key, event_type, has_repository)
      VALUES (?, ?, ?)`,
     connectionKey,
+    // oxlint-disable-next-line local/no-nullish-coalesce-noop -- Durable Object SQL bindings do not accept undefined.
     filters.type ?? null,
     hasRepository,
   );
-  if (filters.repository === undefined) return;
+  if (filters.repository == null) return;
   for (const [sequence, value] of chunkRepositoryFilter(filters.repository).entries()) {
     storage.sql.exec(
       `INSERT INTO subscription_repository_chunks
@@ -463,8 +468,9 @@ function writeSubscription(
 function readFilters(
   storage: DurableObjectStorage,
   connectionKey: string,
-): EventFilters | undefined {
+): EventFilters | null | undefined {
   const metadata = storage.sql.exec<{
+    // oxlint-disable-next-line local/no-incomplete-nullish-types -- D1 SQL result values cannot be undefined.
     eventType: string | null;
     hasRepository: number;
   }>(
@@ -472,19 +478,17 @@ function readFilters(
      FROM subscriptions WHERE connection_key = ?`,
     connectionKey,
   ).toArray()[0];
-  if (metadata === undefined) return undefined;
+  if (metadata == null) return undefined;
   const chunks = storage.sql.exec<{ value: string }>(
     `SELECT value FROM subscription_repository_chunks
      WHERE connection_key = ? ORDER BY sequence`,
     connectionKey,
   ).toArray().map(({ value }) => value);
   return Parsers.EventFilters.parse({
-    ...(metadata.eventType === null
-      ? {}
-      : { type: metadata.eventType }),
-    ...(metadata.hasRepository === 0
-      ? {}
-      : { repository: joinRepositoryFilter(chunks) }),
+    type: metadata.eventType,
+    repository: metadata.hasRepository === 0
+      ? undefined
+      : joinRepositoryFilter(chunks),
   });
 }
 
@@ -528,7 +532,7 @@ function scanRows(
   );
 }
 
-function parseCursorPosition(value: string): string | undefined {
+function parseCursorPosition(value: string): string | null | undefined {
   return /^cursor_(0|[1-9][0-9]*)$/u.exec(value)?.[1];
 }
 

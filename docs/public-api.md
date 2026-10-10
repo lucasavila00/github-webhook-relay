@@ -3,6 +3,12 @@
 The relay keeps GitHub events in one ordered log. It retains the original
 GitHub payload and delivers stored events in log order.
 
+The public webhook hostname accepts only `POST /webhooks/github`. The relay
+hostname serves the webapp, event history, and event stream after Cloudflare
+Access authentication. The webhook hostname returns 404 for the read surface.
+The relay Worker returns 404 for the webhook path after Access authentication.
+An unknown hostname does not route to either Worker.
+
 ## Events
 
 An event has this JSON shape:

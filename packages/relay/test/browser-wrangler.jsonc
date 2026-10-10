@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "github-webhook-relay-browser-test",
-  "main": "../src/index.ts",
+  "main": "runtime-worker.ts",
   "compatibility_date": "2026-10-06",
   "assets": {
     "directory": "../../webapp/dist",
@@ -11,7 +11,6 @@
   "vars": {
     "ACCESS_AUD": "test-audience",
     "ACCESS_TEAM_DOMAIN": "http://127.0.0.1:18792",
-    "RELAY_HOSTNAME": "localhost",
     "WEBHOOK_SECRET": "test-secret"
   },
   "durable_objects": {
