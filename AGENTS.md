@@ -110,11 +110,10 @@ request body when the user requests that issue or pull request.
 ## 11. Use One Nullish Value
 
 Treat `null`, `undefined`, and a missing property as the same absent value. A
-library or protocol can require a distinction. Document each such distinction.
+library can require a distinction. Document each such distinction.
 
 - Declare each nullable type with both `null` and `undefined`. Do not use only
   one of these types in a nullable union.
-- Use `null` as the canonical value when code produces an absent value.
 - Declare nullable function inputs as `T | null | undefined`.
 - Do not use the `?` marker for application properties, parameters, methods, or
   tuple elements. Make the item required and use `T | null | undefined`.
