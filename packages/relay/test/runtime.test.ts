@@ -6,6 +6,10 @@ import {
   SELF,
 } from "cloudflare:test";
 import { Capabilities } from "@beff/diy/capabilities";
+import {
+  Parsers,
+  type ErrorCode,
+} from "@github-webhook-relay/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -126,14 +130,14 @@ describe.sequential("GitHub webhook ingestion", () => {
       headers: headers("issues", "signature-1", signature),
       body,
     });
-    expect(rejected.status).toBe(401);
+    await expectError(rejected, 401, "unauthorized");
 
     const invalidJson = await SELF.fetch("https://relay.test/webhooks/github", {
       method: "POST",
       headers: headers("issues", "signature-2", await sign("not-json")),
       body: "not-json",
     });
-    expect(invalidJson.status).toBe(400);
+    await expectError(invalidJson, 400, "invalid_request");
     expect(await readRows()).toEqual([]);
   });
 
@@ -152,7 +156,7 @@ describe.sequential("GitHub webhook ingestion", () => {
         headers: requestHeaders,
         body,
       });
-      expect(response.status).toBe(401);
+      await expectError(response, 401, "unauthorized");
     },
   );
 
@@ -166,7 +170,7 @@ describe.sequential("GitHub webhook ingestion", () => {
       },
       body,
     });
-    expect(missingDelivery.status).toBe(400);
+    await expectError(missingDelivery, 400, "invalid_request");
 
     const missingEvent = await SELF.fetch("https://relay.test/webhooks/github", {
       method: "POST",
@@ -176,14 +180,14 @@ describe.sequential("GitHub webhook ingestion", () => {
       },
       body,
     });
-    expect(missingEvent.status).toBe(400);
+    await expectError(missingEvent, 400, "invalid_request");
 
     const invalidFields = await send(
       "issues",
       "invalid-fields-1",
       JSON.stringify({ action: "opened", repository: {} }),
     );
-    expect(invalidFields.status).toBe(400);
+    await expectError(invalidFields, 400, "invalid_request");
   });
 
   it("stores original bytes and deduplicates concurrent deliveries", async () => {
@@ -245,7 +249,7 @@ describe.sequential("GitHub webhook ingestion", () => {
     );
 
     const response = await send("issues", "storage-failure", payload({ action: "opened" }));
-    expect(response.status).toBe(500);
+    await expectError(response, 500, "internal_error");
   });
 });
 
@@ -426,6 +430,17 @@ async function readRows(): Promise<ReadonlyArray<StoredRow>> {
        ORDER BY position`,
     ).toArray(),
   );
+}
+
+async function expectError(
+  response: Response,
+  status: number,
+  code: ErrorCode,
+): Promise<void> {
+  expect(response.status).toBe(status);
+  const body = Parsers.HttpError.parse(await response.json());
+  expect(body.error.code).toBe(code);
+  expect(body.error.message.length).toBeGreaterThan(0);
 }
 
 function payload(
