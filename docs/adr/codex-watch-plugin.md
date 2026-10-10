@@ -10,11 +10,10 @@ events before Codex handles them.
 
 ## Decision
 
-Add a `gh-watch` Codex plugin at `plugins/gh-watch`. Its
-`.codex-plugin/plugin.json`, `.mcp.json`, and `skills/gh-watch/SKILL.md` use the
-Codex compatibility layout. A repo marketplace at
-`.agents/plugins/marketplace.json` exposes the plugin. The package does not
-need hooks, an app, or a UI.
+Add a `gh-watch` Codex plugin at `plugins/gh-watch`. It uses the compatibility
+`.codex-plugin/plugin.json`, `.mcp.json`, and `skills/gh-watch/SKILL.md` layout.
+A repo marketplace at `.agents/plugins/marketplace.json` exposes it. The
+package does not need hooks, an app, or a UI.
 
 The plugin starts one bundled Node.js stdio MCP server. Esbuild includes the
 local client, official MCP TypeScript SDK, and all non-built-in dependencies.
@@ -78,4 +77,4 @@ No provider response or tool call is mocked or canned.
 
 - Codex must call `watch` again after each timeout or handled batch.
 - The MCP process lifetime does not change durable consumer progress rules.
-- Installation needs Linux, `flock`, Node.js, and the four environment values.
+- Installation needs Linux, `flock`, Node.js, and four environment values.
