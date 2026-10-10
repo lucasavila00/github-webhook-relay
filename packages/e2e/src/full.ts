@@ -1,6 +1,11 @@
 import process from "node:process";
 
-import { Parsers, type Event, type LiveE2eReport } from "@github-webhook-relay/core";
+import {
+  Parsers,
+  type Event,
+  type LiveE2eReport,
+  type WatchResult,
+} from "@github-webhook-relay/core";
 
 import { verifyDeniedAccess } from "./access.ts";
 import { createAdapters } from "./adapters.ts";
@@ -143,27 +148,24 @@ async function scanExpected(
 }
 
 function collectExpected(
-  result: unknown,
+  result: WatchResult,
   expectedIds: ReadonlySet<string>,
   found: ReadonlySet<string>,
 ): ReadonlySet<string> {
-  const parsed = Parsers.WatchResult.parse(result);
-  if (parsed.type !== "batch") throw new Error("The watch tool timed out.");
+  if (result.type !== "batch") throw new Error("The watch tool timed out.");
   return new Set([
     ...found,
-    ...parsed.events
+    ...result.events
       .filter(({ id }) => expectedIds.has(id))
       .map(({ id }) => id),
   ]);
 }
 
-function requireSameBatch(first: unknown, second: unknown): void {
-  const a = Parsers.WatchResult.parse(first);
-  const b = Parsers.WatchResult.parse(second);
-  if (a.type !== "batch" || b.type !== "batch") {
+function requireSameBatch(first: WatchResult, second: WatchResult): void {
+  if (first.type !== "batch" || second.type !== "batch") {
     throw new Error("The offline watch did not return a batch.");
   }
-  if (JSON.stringify(a.events) !== JSON.stringify(b.events)) {
+  if (JSON.stringify(first.events) !== JSON.stringify(second.events)) {
     throw new Error("The unacknowledged batch did not repeat.");
   }
 }

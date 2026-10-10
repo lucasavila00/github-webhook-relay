@@ -193,7 +193,7 @@ async function openTool(
           waitMilliseconds: 55_000,
         },
       });
-      return Parsers.WatchResult.parse(result.structuredContent);
+      return parseWatchResult(result.structuredContent);
     },
     acknowledge: async (result) => {
       if (result.type !== "batch") return;
@@ -204,5 +204,28 @@ async function openTool(
       if (response.isError === true) throw new Error("Acknowledgement failed.");
     },
     close: () => client.close(),
+  };
+}
+
+function parseWatchResult(input: unknown): WatchResult {
+  if (typeof input !== "object" || input === null || !("type" in input)) {
+    throw new Error("The watch tool returned an invalid result.");
+  }
+  if (input.type === "timeout") return { type: "timeout" };
+  if (
+    input.type !== "batch" ||
+    !("events" in input) ||
+    !Array.isArray(input.events) ||
+    !("acknowledgement" in input)
+  ) {
+    throw new Error("The watch tool returned an invalid result.");
+  }
+  const { acknowledgement } = Parsers.AcknowledgeToolInput.parse({
+    acknowledgement: input.acknowledgement,
+  });
+  return {
+    type: "batch",
+    events: input.events.map((event) => Parsers.Event.parse(event)),
+    acknowledgement,
   };
 }
