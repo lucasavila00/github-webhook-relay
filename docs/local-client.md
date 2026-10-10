@@ -22,6 +22,36 @@ The client sends the service-token headers on the outbound WebSocket upgrade.
 It does not write credentials to cursor files or error messages. The Node
 adapter requires Linux and the `flock` command.
 
+## Codex plugin
+
+The repo marketplace packages the local client as the `gh-watch` plugin. Set
+the client configuration in the environment that starts Codex:
+
+```sh
+export GH_WATCH_RELAY_URL=https://relay.example.com
+export GH_WATCH_STATE_DIRECTORY=/home/user/.local/state/gh-watch
+export CF_ACCESS_CLIENT_ID=service-token-id
+export CF_ACCESS_CLIENT_SECRET=service-token-secret
+```
+
+Install the plugin from a local checkout:
+
+```sh
+codex plugin marketplace add /absolute/path/to/github-webhook-relay
+codex plugin add gh-watch@github-webhook-relay
+codex
+```
+
+For a Git source, replace the absolute path with
+`lucasavila00/github-webhook-relay` and select a ref that contains the plugin.
+In the new session, ask Codex to use `$gh-watch` with a stable consumer name and
+the required repository and event type filters. Codex calls `watch` again after
+a timeout and calls `acknowledge` only after it handles the returned batch.
+
+The installed plugin contains its server and runtime dependencies. It does not
+use files from the source checkout. Plugin changes apply to new sessions after
+Codex refreshes the installed plugin.
+
 ## Watch and acknowledge
 
 Each watch has a consumer name and normalized repository and event type
