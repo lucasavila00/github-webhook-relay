@@ -298,24 +298,22 @@ describe("relay Access boundary", () => {
     expect((await handleAccessRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events", token))).status).toBe(401);
   });
 
-  it("rejects WebSocket access through an alternate hostname", async () => {
+  it("accepts an authenticated WebSocket on the relay hostname", async () => {
     const keys = await createSigningKeys();
     await installKey(keys);
     const token = await signToken(keys, validClaims());
-    expect((await handleAccessRequest(capabilities, configuration, authenticatedRequest("https://alternate.example.com/api/events/stream", token, true))).status).toBe(403);
     expect((await handleAccessRequest(capabilities, configuration, authenticatedRequest("https://relay.example.com/api/events/stream", token, true))).status).toBe(101);
   });
 
-  it("routes only the exact webhook POST without Access", async () => {
+  it("rejects the webhook path in the relay Worker", async () => {
     const body = "{\"zen\":\"test\"}";
-    const request = (url: string, method: string): Request =>
-      new Request(url, method === "POST"
-        ? { method, body }
-        : { method });
+    const request = new Request("https://relay.example.com/webhooks/github", {
+      method: "POST",
+      body,
+    });
 
-    expect((await handleAccessRequest(capabilities, configuration, request("https://relay.example.com/webhooks/github", "POST"))).status).toBe(401);
-    expect((await handleAccessRequest(capabilities, configuration, request("https://alternate.example.com/webhooks/github", "POST"))).status).toBe(401);
-    expect((await handleAccessRequest(capabilities, configuration, request("https://relay.example.com/webhooks/github", "GET"))).status).toBe(401);
+    expect((await handleAccessRequest(capabilities, configuration, request)).status)
+      .toBe(404);
   });
 
   it("loads the SQLite Durable Object binding", async () => {

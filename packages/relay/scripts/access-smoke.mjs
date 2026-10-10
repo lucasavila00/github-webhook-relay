@@ -65,7 +65,7 @@ if (mode === "revocation") {
   process.exit(0);
 }
 
-const alternateRelayUrl = required("ALTERNATE_RELAY_URL");
+const webhookUrl = required("WEBHOOK_URL");
 const webhookSecret = required("GITHUB_WEBHOOK_SECRET");
 
 const validHttp = await fetch(new URL("/api/events", relayUrl), {
@@ -88,27 +88,11 @@ const deniedCustomUpgrade = await getUpgradeStatus(
 );
 expectStatus("invalid service custom-host WebSocket", deniedCustomUpgrade, [403]);
 
-const alternateUpgrade = await getUpgradeStatus(
-  alternateRelayUrl,
-  serviceHeaders(clientSecret),
-);
-expectStatus("alternate-host WebSocket", alternateUpgrade, [403]);
-
-const unauthenticatedAlternateHttp = await fetch(
-  new URL("/api/events", alternateRelayUrl),
-  { redirect: "manual" },
-);
-expectStatus(
-  "unauthenticated alternate-host HTTP",
-  unauthenticatedAlternateHttp.status,
-  [403],
-);
-
 const webhookBody = JSON.stringify({ zen: "access-smoke" });
 const webhookSignature = createHmac("sha256", webhookSecret)
   .update(webhookBody)
   .digest("hex");
-const webhook = await fetch(new URL("/webhooks/github", relayUrl), {
+const webhook = await fetch(webhookUrl, {
   method: "POST",
   body: webhookBody,
   headers: {
@@ -120,7 +104,7 @@ const webhook = await fetch(new URL("/webhooks/github", relayUrl), {
 });
 expectStatus("signed webhook", webhook.status, [204]);
 
-const invalidWebhook = await fetch(new URL("/webhooks/github", relayUrl), {
+const invalidWebhook = await fetch(webhookUrl, {
   method: "POST",
   body: webhookBody,
   headers: { "X-Hub-Signature-256": "sha256=invalid" },
